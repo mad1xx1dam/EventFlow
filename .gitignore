@@ -1,0 +1,65 @@
+# =========================
+# Секреты и конфигурации
+# =========================
+.env
+.env.*
+*.log
+
+# =========================
+# Бэкенд (Spring Boot / Gradle)
+# =========================
+HELP.md
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# =========================
+# Фронтенд (React / Node.js)
+# =========================
+node_modules/
+dist/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.eslintcache
+
+# =========================
+# Настройки IntelliJ IDEA
+# =========================
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+!**/src/main/**/out/
+!**/src/test/**/out/
+# убрали начальные слэши, чтобы гит искал их на любой глубине:
+shelf/
+workspace.xml
+queries/
+dataSources/
+dataSources.local.xml
+httpRequests/
+
+# =========================
+# Другие IDE (VS Code, Eclipse)
+# =========================
+.vscode/
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+bin/
+!**/src/main/**/bin/
+!**/src/test/**/bin/
+
+# =========================
+# Системные файлы ОС
+# =========================
+.DS_Store
+Thumbs.db

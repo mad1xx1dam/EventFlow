@@ -1,0 +1,58 @@
+spring:
+  application:
+    name: eventflow-backend
+
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/${POSTGRES_DB:eventflow}
+    username: ${POSTGRES_USER:postgres}
+    password: ${POSTGRES_PASSWORD:astayuna1337}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+    enabled: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:strong_redis_password}
+
+  mail:
+    host: ${MAIL_HOST:smtp.yandex.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:mail@yandex.com}
+    password: ${MAIL_PASSWORD:password}
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:very_long_and_secure_secret_key_for_eventflow_2026}
+    expiration-ms: 86400000
+  minio:
+    url: ${MINIO_URL:http://localhost:9000}
+    access-key: ${MINIO_ROOT_USER:admin}
+    secret-key: ${MINIO_ROOT_PASSWORD:astayuna7331}
+    bucket: eventflow-posters
+  mail:
+    from: ${MAIL_FROM:test@example.com}
+    frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
+    invitation-base-url: ${INVITATION_BASE_URL:http://localhost:5173/event}
