@@ -2,6 +2,7 @@ package com.eventflow.eventflow_backend.dto.request;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -22,7 +23,11 @@ public class RegisterRequest {
     private String email;
 
     @NotBlank(message = "Пароль обязателен для заполнения")
-    @Size(min = 6, max = 100, message = "Пароль должен содержать от 6 до 100 символов")
+    @Size(min = 8, max = 100, message = "Пароль должен содержать от 8 до 100 символов") // Увеличил до 8
+    @Pattern(
+            regexp = "^(?=.*[0-9])(?=.*[a-zа-я])(?=.*[A-ZА-Я]).*$",
+            message = "Пароль должен содержать цифры, заглавные и строчные буквы"
+    )
     private String password;
 
     @NotBlank(message = "Подтверждение пароля обязательно для заполнения")

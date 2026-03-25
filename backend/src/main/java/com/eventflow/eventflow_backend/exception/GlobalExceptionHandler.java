@@ -68,7 +68,7 @@ public class GlobalExceptionHandler {
 
         ApiErrorResponse response = apiErrorBuilder.build(
                 HttpStatus.INTERNAL_SERVER_ERROR,
-                ex.getMessage(),
+                "Произошла ошибка при обработке данных на сервере. Попробуйте позже.", // Нейтральный текст
                 request.getRequestURI()
         );
 

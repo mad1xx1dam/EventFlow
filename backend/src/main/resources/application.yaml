@@ -56,3 +56,7 @@ app:
     from: ${MAIL_FROM}
     frontend-base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
     invitation-base-url: ${INVITATION_BASE_URL:http://localhost:5173/event}
+
+logging:
+  level:
+    org.springframework.web.filter.CommonsRequestLoggingFilter: DEBUG
