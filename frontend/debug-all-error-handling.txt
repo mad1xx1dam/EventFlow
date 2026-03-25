@@ -1,0 +1,1766 @@
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\components\auth\LoginForm.tsx ====================
+
+import { useState, type FormEvent } from "react";
+import Input from "../common/Input";
+import Button from "../common/Button";
+import useAuth from "../../hooks/useAuth";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+interface LoginFormProps {
+  onSuccess?: () => void;
+}
+
+interface LoginFormErrors {
+  email?: string;
+  password?: string;
+  common?: string;
+}
+
+const LoginForm = ({ onSuccess }: LoginFormProps) => {
+  const { login } = useAuth();
+
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [errors, setErrors] = useState<LoginFormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const validate = (): boolean => {
+    const nextErrors: LoginFormErrors = {};
+
+    if (!email.trim()) {
+      nextErrors.email = "Email обязателен для заполнения";
+    }
+
+    if (!password.trim()) {
+      nextErrors.password = "Пароль обязателен для заполнения";
+    }
+
+    setErrors(nextErrors);
+
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!validate()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrors({});
+
+    try {
+      await login({
+        email: email.trim(),
+        password,
+      });
+
+      onSuccess?.();
+    } catch (error: unknown) {
+      setErrors({
+        common: getApiErrorMessage(error, "Не удалось выполнить вход"),
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form className="space-y-5" onSubmit={handleSubmit}>
+      {errors.common ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errors.common}
+        </div>
+      ) : null}
+
+      <Input
+        label="Email"
+        name="email"
+        type="email"
+        placeholder="Введите email"
+        autoComplete="email"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        error={errors.email}
+      />
+
+      <Input
+        label="Пароль"
+        name="password"
+        type="password"
+        placeholder="Введите пароль"
+        autoComplete="current-password"
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+        error={errors.password}
+      />
+
+      <Button type="submit" isLoading={isSubmitting}>
+        Войти
+      </Button>
+    </form>
+  );
+};
+
+export default LoginForm;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\components\auth\RegisterForm.tsx ====================
+
+import { useState, type FormEvent } from "react";
+import { authApi } from "../../api/authApi";
+import Input from "../common/Input";
+import Button from "../common/Button";
+import { getApiErrorData, getApiErrorMessage } from "../../utils/apiError";
+
+interface RegisterFormProps {
+  onSuccess?: (message: string) => void;
+}
+
+interface RegisterFormErrors {
+  name?: string;
+  email?: string;
+  password?: string;
+  confirmPassword?: string;
+  common?: string;
+}
+
+const RegisterForm = ({ onSuccess }: RegisterFormProps) => {
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [errors, setErrors] = useState<RegisterFormErrors>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const validate = (): boolean => {
+    const nextErrors: RegisterFormErrors = {};
+
+    if (!name.trim()) {
+      nextErrors.name = "Имя обязательно для заполнения";
+    }
+
+    if (!email.trim()) {
+      nextErrors.email = "Email обязателен для заполнения";
+    }
+
+    if (!password.trim()) {
+      nextErrors.password = "Пароль обязателен для заполнения";
+    }
+
+    if (!confirmPassword.trim()) {
+      nextErrors.confirmPassword = "Подтверждение пароля обязательно для заполнения";
+    }
+
+    if (password && confirmPassword && password !== confirmPassword) {
+      nextErrors.confirmPassword = "Пароли не совпадают";
+    }
+
+    setErrors(nextErrors);
+
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!validate()) {
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrors({});
+
+    try {
+      const response = await authApi.register({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        confirmPassword,
+      });
+
+      onSuccess?.(response.message);
+    } catch (error: unknown) {
+      const data = getApiErrorData(error);
+
+      if (data?.errors) {
+        setErrors({
+          name: typeof data.errors.name === "string" ? data.errors.name : undefined,
+          email: typeof data.errors.email === "string" ? data.errors.email : undefined,
+          password: typeof data.errors.password === "string" ? data.errors.password : undefined,
+          confirmPassword:
+            typeof data.errors.confirmPassword === "string"
+              ? data.errors.confirmPassword
+              : undefined,
+          common:
+            data.message && data.message !== "Ошибка валидации входных данных"
+              ? data.message
+              : undefined,
+        });
+      } else {
+        setErrors({
+          common: getApiErrorMessage(error, "Не удалось выполнить регистрацию"),
+        });
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form className="space-y-5" onSubmit={handleSubmit}>
+      {errors.common ? (
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errors.common}
+        </div>
+      ) : null}
+
+      <Input
+        label="Имя"
+        name="name"
+        type="text"
+        placeholder="Введите имя"
+        autoComplete="name"
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        error={errors.name}
+      />
+
+      <Input
+        label="Email"
+        name="email"
+        type="email"
+        placeholder="Введите email"
+        autoComplete="email"
+        value={email}
+        onChange={(event) => setEmail(event.target.value)}
+        error={errors.email}
+      />
+
+      <Input
+        label="Пароль"
+        name="password"
+        type="password"
+        placeholder="Введите пароль"
+        autoComplete="new-password"
+        value={password}
+        onChange={(event) => setPassword(event.target.value)}
+        error={errors.password}
+      />
+
+      <Input
+        label="Подтверждение пароля"
+        name="confirmPassword"
+        type="password"
+        placeholder="Повторите пароль"
+        autoComplete="new-password"
+        value={confirmPassword}
+        onChange={(event) => setConfirmPassword(event.target.value)}
+        error={errors.confirmPassword}
+      />
+
+      <Button type="submit" isLoading={isSubmitting}>
+        Зарегистрироваться
+      </Button>
+    </form>
+  );
+};
+
+export default RegisterForm;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\components\events\EventForm.tsx ====================
+
+import { useMemo, useState, type FormEvent } from "react";
+import type { EventRequest, EventResponse } from "../../types/event";
+import Input from "../common/Input";
+import Button from "../common/Button";
+import EventMapPicker from "../map/EventMapPicker";
+import LocationSearchInput from "../map/LocationSearchInput";
+import EventPosterUploader from "./EventPosterUploader";
+import { getApiErrorData } from "../../utils/apiError";
+
+interface EventFormState {
+  title: string;
+  description: string;
+  startsAt: string;
+  address: string;
+  lat: number | null;
+  lon: number | null;
+  poster: File | null;
+}
+
+interface EventFormErrors {
+  title?: string;
+  startsAt?: string;
+  address?: string;
+  common?: string;
+}
+
+interface EventFormSubmitPayload {
+  event: EventRequest;
+  poster: File | null;
+}
+
+interface EventFormProps {
+  mode: "create" | "edit";
+  initialEvent?: EventResponse | null;
+  initialStartsAt?: string;
+  isSubmitting?: boolean;
+  submitLabel: string;
+  onSubmit: (payload: EventFormSubmitPayload) => Promise<void>;
+}
+
+const toDateTimeLocalValue = (value: string) => {
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const timezoneOffset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - timezoneOffset * 60_000);
+
+  return localDate.toISOString().slice(0, 16);
+};
+
+const buildInitialState = (
+  initialEvent?: EventResponse | null,
+  initialStartsAt?: string
+): EventFormState => ({
+  title: initialEvent?.title ?? "",
+  description: initialEvent?.description ?? "",
+  startsAt: initialEvent?.startsAt
+    ? toDateTimeLocalValue(initialEvent.startsAt)
+    : initialStartsAt ?? "",
+  address: initialEvent?.address ?? "",
+  lat: initialEvent?.lat ?? null,
+  lon: initialEvent?.lon ?? null,
+  poster: null,
+});
+
+const EventForm = ({
+  mode,
+  initialEvent,
+  initialStartsAt,
+  isSubmitting = false,
+  submitLabel,
+  onSubmit,
+}: EventFormProps) => {
+  const initialState = useMemo(
+    () => buildInitialState(initialEvent, initialStartsAt),
+    [initialEvent, initialStartsAt]
+  );
+
+  const [form, setForm] = useState<EventFormState>(initialState);
+  const [errors, setErrors] = useState<EventFormErrors>({});
+
+  const validate = () => {
+    const nextErrors: EventFormErrors = {};
+
+    if (!form.title.trim()) {
+      nextErrors.title = "Название обязательно для заполнения";
+    }
+
+    if (!form.startsAt) {
+      nextErrors.startsAt = "Дата и время обязательны для заполнения";
+    }
+
+    if (!form.address.trim()) {
+      nextErrors.address = "Адрес обязателен для заполнения";
+    }
+
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    if (!validate()) {
+      return;
+    }
+
+    setErrors({});
+
+    try {
+      await onSubmit({
+        event: {
+          title: form.title.trim(),
+          description: form.description.trim() || null,
+          startsAt: new Date(form.startsAt).toISOString(),
+          address: form.address.trim(),
+          lat: form.lat,
+          lon: form.lon,
+        },
+        poster: form.poster,
+      });
+    } catch (error: unknown) {
+      const data = getApiErrorData(error);
+      const fallbackMessage =
+        mode === "create"
+          ? "Не удалось создать мероприятие"
+          : "Не удалось обновить мероприятие";
+
+      if (data?.errors) {
+        setErrors({
+          title: typeof data.errors.title === "string" ? data.errors.title : undefined,
+          startsAt:
+            typeof data.errors.startsAt === "string" ? data.errors.startsAt : undefined,
+          address: typeof data.errors.address === "string" ? data.errors.address : undefined,
+          common:
+            data.message && data.message !== "Ошибка валидации входных данных"
+              ? data.message
+              : undefined,
+        });
+      } else {
+        setErrors({
+          common:
+            typeof data?.message === "string" && data.message.trim()
+              ? data.message
+              : fallbackMessage,
+        });
+      }
+    }
+  };
+
+  return (
+    <form
+      key={initialEvent?.id ?? `create-${initialStartsAt ?? "empty"}`}
+      onSubmit={handleSubmit}
+      className="space-y-6"
+    >
+      {errors.common ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {errors.common}
+        </div>
+      ) : null}
+
+      <div className="grid gap-6">
+        <Input
+          label="Название"
+          name="title"
+          type="text"
+          placeholder="Введите название мероприятия"
+          value={form.title}
+          onChange={(event) =>
+            setForm((prev) => ({
+              ...prev,
+              title: event.target.value,
+            }))
+          }
+          error={errors.title}
+        />
+
+        <div>
+          <label
+            htmlFor="description"
+            className="mb-2 block text-sm font-medium text-slate-700"
+          >
+            Описание
+          </label>
+          <textarea
+            id="description"
+            rows={5}
+            value={form.description}
+            onChange={(event) =>
+              setForm((prev) => ({
+                ...prev,
+                description: event.target.value,
+              }))
+            }
+            placeholder="Опишите мероприятие"
+            className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-slate-900 focus:ring-4 focus:ring-slate-100"
+          />
+        </div>
+
+        <Input
+          label="Дата и время начала"
+          name="startsAt"
+          type="datetime-local"
+          value={form.startsAt}
+          onChange={(event) =>
+            setForm((prev) => ({
+              ...prev,
+              startsAt: event.target.value,
+            }))
+          }
+          error={errors.startsAt}
+        />
+
+        <LocationSearchInput
+          value={form.address}
+          onChange={(value) =>
+            setForm((prev) => ({
+              ...prev,
+              address: value,
+            }))
+          }
+          error={errors.address}
+        />
+
+        <EventMapPicker
+          lat={form.lat}
+          lon={form.lon}
+          onLocationChange={({ lat, lon, address }) => {
+            setForm((prev) => ({
+              ...prev,
+              lat,
+              lon,
+              address,
+            }));
+          }}
+        />
+
+        <EventPosterUploader
+          file={form.poster}
+          posterUrl={initialEvent?.posterUrl ?? null}
+          onChange={(poster) =>
+            setForm((prev) => ({
+              ...prev,
+              poster,
+            }))
+          }
+        />
+      </div>
+
+      <Button type="submit" isLoading={isSubmitting}>
+        {submitLabel}
+      </Button>
+    </form>
+  );
+};
+
+export default EventForm;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\components\guest\GuestPollModal.tsx ====================
+
+import { useEffect, useState } from "react";
+import pollsApi from "../../api/pollsApi";
+import type { PollResponse } from "../../types/poll";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+interface GuestPollModalProps {
+  poll: PollResponse;
+  guestToken: string;
+  isOpen: boolean;
+  onClose: () => void;
+  onVoted: (poll: PollResponse) => void;
+}
+
+const GuestPollModal = ({
+  poll,
+  guestToken,
+  isOpen,
+  onClose,
+  onVoted,
+}: GuestPollModalProps) => {
+  const [selectedOptionId, setSelectedOptionId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    setSelectedOptionId(null);
+    setError(null);
+    setIsSubmitting(false);
+  }, [poll.id, isOpen]);
+
+  if (!isOpen) {
+    return null;
+  }
+
+  const handleVote = async () => {
+    if (selectedOptionId === null) {
+      setError("Выберите один из вариантов");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const updatedPoll = await pollsApi.votePoll(poll.id, guestToken, {
+        pollOptionId: selectedOptionId,
+      });
+      onVoted(updatedPoll);
+      onClose();
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(error, "Не удалось отправить голос"));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 px-4">
+      <div className="w-full max-w-2xl rounded-3xl bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+              Активный опрос
+            </p>
+            <h2 className="mt-2 text-2xl font-bold text-slate-900">{poll.question}</h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-600 transition hover:bg-slate-50"
+          >
+            Закрыть
+          </button>
+        </div>
+
+        <div className="mt-6 space-y-3">
+          {poll.options.map((option) => {
+            const checked = selectedOptionId === option.id;
+
+            return (
+              <label
+                key={option.id}
+                className={[
+                  "flex cursor-pointer items-center gap-3 rounded-2xl border px-4 py-4 transition",
+                  checked
+                    ? "border-slate-900 bg-slate-50"
+                    : "border-slate-200 hover:bg-slate-50",
+                ].join(" ")}
+              >
+                <input
+                  type="radio"
+                  name="poll-option"
+                  checked={checked}
+                  onChange={() => setSelectedOptionId(option.id)}
+                  className="h-4 w-4"
+                />
+                <span className="text-sm font-medium text-slate-700">{option.optionText}</span>
+              </label>
+            );
+          })}
+        </div>
+
+        {error ? (
+          <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+          >
+            Позже
+          </button>
+
+          <button
+            type="button"
+            onClick={handleVote}
+            disabled={isSubmitting}
+            className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isSubmitting ? "Отправляем..." : "Проголосовать"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default GuestPollModal;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\components\guest\GuestRsvpPanel.tsx ====================
+
+import { useState } from "react";
+import invitationsApi from "../../api/invitationsApi";
+import type {
+  GuestInvitationDetailsResponse,
+  RsvpStatus,
+} from "../../types/invitation";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+interface GuestRsvpPanelProps {
+  eventId: number;
+  guestToken: string;
+  currentStatus: RsvpStatus;
+  onUpdated: (invitation: GuestInvitationDetailsResponse) => void;
+}
+
+const buttons: Array<{
+  status: Exclude<RsvpStatus, "PENDING">;
+  label: string;
+  className: string;
+}> = [
+  {
+    status: "GOING",
+    label: "Иду",
+    className: "bg-emerald-600 hover:bg-emerald-700",
+  },
+  {
+    status: "MAYBE",
+    label: "Возможно",
+    className: "bg-amber-500 hover:bg-amber-600",
+  },
+  {
+    status: "DECLINED",
+    label: "Отказался",
+    className: "bg-red-600 hover:bg-red-700",
+  },
+];
+
+const GuestRsvpPanel = ({
+  eventId,
+  guestToken,
+  currentStatus,
+  onUpdated,
+}: GuestRsvpPanelProps) => {
+  const [isSubmitting, setIsSubmitting] = useState<RsvpStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleUpdate = async (status: Exclude<RsvpStatus, "PENDING">) => {
+    setIsSubmitting(status);
+    setError(null);
+
+    try {
+      const updated = await invitationsApi.updateRsvp(eventId, guestToken, {
+        rsvpStatus: status,
+      });
+      onUpdated(updated);
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(error, "Не удалось обновить RSVP-статус"));
+    } finally {
+      setIsSubmitting(null);
+    }
+  };
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+      <h2 className="text-xl font-bold text-slate-900">Ваш ответ</h2>
+      <p className="mt-2 text-sm text-slate-500">
+        Выберите статус участия. Его можно изменить позже.
+      </p>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        {buttons.map((button) => {
+          const isActive = currentStatus === button.status;
+          const isLoading = isSubmitting === button.status;
+
+          return (
+            <button
+              key={button.status}
+              type="button"
+              onClick={() => handleUpdate(button.status)}
+              disabled={isSubmitting !== null}
+              className={[
+                "rounded-2xl px-4 py-4 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-70",
+                button.className,
+                isActive ? "ring-4 ring-offset-2 ring-slate-200" : "",
+              ].join(" ")}
+            >
+              {isLoading ? "Сохраняем..." : button.label}
+            </button>
+          );
+        })}
+      </div>
+
+      {error ? (
+        <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
+    </div>
+  );
+};
+
+export default GuestRsvpPanel;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\components\polls\ActivePollBanner.tsx ====================
+
+import { useState } from "react";
+import pollsApi from "../../api/pollsApi";
+import Button from "../common/Button";
+import type { PollResponse } from "../../types/poll";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+interface ActivePollBannerProps {
+  poll: PollResponse;
+  onClosed: (poll: PollResponse) => void;
+}
+
+const ActivePollBanner = ({ poll, onClosed }: ActivePollBannerProps) => {
+  const [error, setError] = useState<string | null>(null);
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleClose = async () => {
+    setIsClosing(true);
+    setError(null);
+
+    try {
+      const closedPoll = await pollsApi.closePoll(poll.id);
+      onClosed(closedPoll);
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(error, "Не удалось завершить опрос"));
+    } finally {
+      setIsClosing(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
+            Активный опрос
+          </p>
+          <h3 className="mt-2 text-xl font-bold text-slate-900">{poll.question}</h3>
+          <p className="mt-2 text-sm text-slate-600">
+            Вариантов ответа: {poll.options.length}
+          </p>
+        </div>
+
+        <div className="w-full lg:w-56">
+          <Button type="button" isLoading={isClosing} onClick={handleClose}>
+            Завершить
+          </Button>
+        </div>
+      </div>
+
+      {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
+    </div>
+  );
+};
+
+export default ActivePollBanner;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\components\polls\PollCreateForm.tsx ====================
+
+import { useState, type FormEvent } from "react";
+import pollsApi from "../../api/pollsApi";
+import Button from "../common/Button";
+import Input from "../common/Input";
+import type { PollResponse } from "../../types/poll";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+interface PollCreateFormProps {
+  eventId: number;
+  onCreated: (poll: PollResponse) => void;
+}
+
+const PollCreateForm = ({ eventId, onCreated }: PollCreateFormProps) => {
+  const [question, setQuestion] = useState("");
+  const [options, setOptions] = useState(["", ""]);
+  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const updateOption = (index: number, value: string) => {
+    setOptions((prev) => prev.map((option, i) => (i === index ? value : option)));
+  };
+
+  const addOption = () => {
+    setOptions((prev) => [...prev, ""]);
+  };
+
+  const removeOption = (index: number) => {
+    setOptions((prev) => {
+      if (prev.length <= 2) {
+        return prev;
+      }
+
+      return prev.filter((_, i) => i !== index);
+    });
+  };
+
+  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const normalizedQuestion = question.trim();
+    const normalizedOptions = options.map((option) => option.trim()).filter(Boolean);
+
+    if (!normalizedQuestion) {
+      setError("Вопрос обязателен для заполнения");
+      return;
+    }
+
+    if (normalizedOptions.length < 2) {
+      setError("Нужно указать минимум два варианта ответа");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      const poll = await pollsApi.createPoll(eventId, {
+        question: normalizedQuestion,
+        options: normalizedOptions,
+      });
+
+      setQuestion("");
+      setOptions(["", ""]);
+      onCreated(poll);
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(error, "Не удалось создать опрос"));
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-5">
+      {error ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
+
+      <Input
+        label="Вопрос"
+        name="pollQuestion"
+        type="text"
+        placeholder="Введите вопрос для опроса"
+        value={question}
+        onChange={(event) => setQuestion(event.target.value)}
+      />
+
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-sm font-medium text-slate-700">Варианты ответа</p>
+          <button
+            type="button"
+            onClick={addOption}
+            className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+          >
+            Добавить вариант
+          </button>
+        </div>
+
+        {options.map((option, index) => (
+          <div key={`option-${index}`} className="flex items-end gap-3">
+            <div className="flex-1">
+              <Input
+                label={`Вариант ${index + 1}`}
+                name={`option-${index}`}
+                type="text"
+                placeholder="Введите вариант ответа"
+                value={option}
+                onChange={(event) => updateOption(index, event.target.value)}
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() => removeOption(index)}
+              disabled={options.length <= 2}
+              className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Удалить
+            </button>
+          </div>
+        ))}
+      </div>
+
+      <Button type="submit" isLoading={isSubmitting}>
+        Создать опрос
+      </Button>
+    </form>
+  );
+};
+
+export default PollCreateForm;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\pages\auth\VerifyEmailPage.tsx ====================
+
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { authApi } from "../../api/authApi";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+type VerifyStatus = "loading" | "success" | "error";
+
+const VerifyEmailPage = () => {
+  const [searchParams] = useSearchParams();
+  const [status, setStatus] = useState<VerifyStatus>("loading");
+  const [message, setMessage] = useState("Подтверждаем email...");
+
+  useEffect(() => {
+    const token = searchParams.get("token");
+
+    const verify = async () => {
+      if (!token) {
+        setStatus("error");
+        setMessage("Токен подтверждения отсутствует");
+        return;
+      }
+
+      try {
+        const response = await authApi.verifyEmail(token);
+        setStatus("success");
+        setMessage(response.message);
+      } catch (error: unknown) {
+        setStatus("error");
+        setMessage(getApiErrorMessage(error, "Не удалось подтвердить email"));
+      }
+    };
+
+    void verify();
+  }, [searchParams]);
+
+  return (
+    <div className="text-center">
+      <h1 className="text-2xl font-bold text-slate-900">Подтверждение email</h1>
+
+      <div
+        className={[
+          "mt-6 rounded-2xl px-5 py-4 text-sm",
+          status === "loading"
+            ? "border border-slate-200 bg-slate-50 text-slate-700"
+            : status === "success"
+              ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+              : "border border-red-200 bg-red-50 text-red-700",
+        ].join(" ")}
+      >
+        {message}
+      </div>
+
+      <Link
+        to="/login"
+        className="mt-6 inline-flex rounded-xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+      >
+        Перейти ко входу
+      </Link>
+    </div>
+  );
+};
+
+export default VerifyEmailPage;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\pages\events\EventCreatePage.tsx ====================
+
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import eventsApi from "../../api/eventsApi";
+import invitationsApi from "../../api/invitationsApi";
+import EventForm from "../../components/events/EventForm";
+import GuestEmailsTextarea from "../../components/events/GuestEmailsTextarea";
+import type { EventRequest } from "../../types/event";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+const toDefaultDateTimeLocal = (dateParam: string | null) => {
+  if (!dateParam) {
+    return "";
+  }
+
+  const date = new Date(`${dateParam}T12:00:00`);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const timezoneOffset = date.getTimezoneOffset();
+  const localDate = new Date(date.getTime() - timezoneOffset * 60_000);
+
+  return localDate.toISOString().slice(0, 16);
+};
+
+const parseGuestEmails = (value: string) => {
+  return Array.from(
+    new Set(
+      value
+        .split(/[\s,;]+/)
+        .map((item) => item.trim())
+        .filter(Boolean)
+    )
+  );
+};
+
+const EventCreatePage = () => {
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const [guestEmails, setGuestEmails] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+
+  const initialStartsAt = useMemo(
+    () => toDefaultDateTimeLocal(searchParams.get("date")),
+    [searchParams]
+  );
+
+  const handleSubmit = async ({
+    event,
+    poster,
+  }: {
+    event: EventRequest;
+    poster: File | null;
+  }) => {
+    setIsSubmitting(true);
+    setPageError(null);
+
+    try {
+      const createdEvent = await eventsApi.createEvent(event, poster);
+
+      const emails = parseGuestEmails(guestEmails);
+
+      if (emails.length > 0) {
+        await invitationsApi.createInvitations(createdEvent.id, {
+          guestEmails: emails,
+        });
+      }
+
+      navigate("/dashboard");
+    } catch (error: unknown) {
+      setPageError(getApiErrorMessage(error, "Не удалось создать мероприятие"));
+      throw error;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          Создание мероприятия
+        </h1>
+        <p className="mt-2 text-sm text-slate-500">
+          Заполните основную информацию, выберите место на карте и при необходимости
+          сразу добавьте гостей.
+        </p>
+      </div>
+
+      {pageError ? (
+        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          {pageError}
+        </div>
+      ) : null}
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <EventForm
+          mode="create"
+          initialStartsAt={initialStartsAt}
+          isSubmitting={isSubmitting}
+          submitLabel="Создать мероприятие"
+          onSubmit={handleSubmit}
+        />
+      </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <h2 className="text-xl font-bold text-slate-900">Приглашения</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          Укажите email гостей, которым нужно отправить приглашения после создания
+          мероприятия.
+        </p>
+
+        <div className="mt-4">
+          <GuestEmailsTextarea value={guestEmails} onChange={setGuestEmails} />
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default EventCreatePage;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\pages\events\EventEditPage.tsx ====================
+
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import eventsApi from "../../api/eventsApi";
+import EventForm from "../../components/events/EventForm";
+import type { EventRequest, EventResponse } from "../../types/event";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+const EventEditPage = () => {
+  const navigate = useNavigate();
+  const { eventId } = useParams<{ eventId: string }>();
+
+  const [eventData, setEventData] = useState<EventResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const loadEvent = async () => {
+      if (!eventId) {
+        setError("Идентификатор мероприятия не найден");
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await eventsApi.getEventById(Number(eventId));
+        setEventData(response);
+      } catch (error: unknown) {
+        setError(getApiErrorMessage(error, "Не удалось загрузить данные мероприятия"));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void loadEvent();
+  }, [eventId]);
+
+  const handleSubmit = async ({
+    event,
+    poster,
+  }: {
+    event: EventRequest;
+    poster: File | null;
+  }) => {
+    if (!eventId) {
+      throw new Error("Идентификатор мероприятия не найден");
+    }
+
+    setIsSubmitting(true);
+    setError(null);
+
+    try {
+      await eventsApi.updateEvent(Number(eventId), event, poster);
+      navigate(`/events/${eventId}/manage`);
+    } catch (error: unknown) {
+      setError(getApiErrorMessage(error, "Не удалось обновить мероприятие"));
+      throw error;
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm text-slate-600 shadow-sm">
+        Загрузка мероприятия...
+      </div>
+    );
+  }
+
+  if (error || !eventData) {
+    return (
+      <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        {error ?? "Мероприятие не найдено"}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mx-auto max-w-4xl space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          Редактирование мероприятия
+        </h1>
+        <p className="mt-2 text-sm text-slate-500">
+          Обновите информацию о мероприятии, место проведения или постер.
+        </p>
+      </div>
+
+      <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+        <EventForm
+          mode="edit"
+          initialEvent={eventData}
+          isSubmitting={isSubmitting}
+          submitLabel="Сохранить изменения"
+          onSubmit={handleSubmit}
+        />
+      </div>
+    </div>
+  );
+};
+
+export default EventEditPage;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\pages\events\EventManagePage.tsx ====================
+
+import { useEffect, useMemo, useState } from "react";
+import { useParams } from "react-router-dom";
+import eventsApi from "../../api/eventsApi";
+import invitationsApi from "../../api/invitationsApi";
+import pollsApi from "../../api/pollsApi";
+import EventDetailsCard from "../../components/events/EventDetailsCard";
+import RsvpCounters from "../../components/guests/RsvpCounters";
+import GuestListTable from "../../components/guests/GuestListTable";
+import EventMapPreview from "../../components/map/EventMapPreview";
+import ActivePollBanner from "../../components/polls/ActivePollBanner";
+import PollCreateForm from "../../components/polls/PollCreateForm";
+import PollResultsChart from "../../components/polls/PollResultsChart";
+import Button from "../../components/common/Button";
+import type { EventResponse } from "../../types/event";
+import type {
+  InvitationResponse,
+  RsvpCountersResponse,
+  RsvpStatus,
+} from "../../types/invitation";
+import type { PollResponse } from "../../types/poll";
+import type { PollLiveEventResponse } from "../../types/ws";
+import useStomp from "../../hooks/useStomp";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+const EventManagePage = () => {
+  const { eventId } = useParams<{ eventId: string }>();
+
+  const [eventData, setEventData] = useState<EventResponse | null>(null);
+  const [guests, setGuests] = useState<InvitationResponse[]>([]);
+  const [activePoll, setActivePoll] = useState<PollResponse | null>(null);
+  const [lastPoll, setLastPoll] = useState<PollResponse | null>(null);
+  const [liveCounters, setLiveCounters] = useState<RsvpCountersResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isResending, setIsResending] = useState(false);
+  const [guestsMessage, setGuestsMessage] = useState<string | null>(null);
+  const [guestsMessageType, setGuestsMessageType] = useState<"success" | "error">("success");
+  const [error, setError] = useState<string | null>(null);
+
+  const numericEventId = useMemo(() => Number(eventId), [eventId]);
+  const token = localStorage.getItem("accessToken");
+
+  const { isConnected, subscribe } = useStomp({
+    token,
+    enabled: Boolean(token && eventId),
+  });
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!eventId || Number.isNaN(numericEventId)) {
+        setError("Идентификатор мероприятия не найден");
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const [eventResponse, guestsResponse, pollResponse] = await Promise.all([
+          eventsApi.getEventById(numericEventId),
+          eventsApi.getEventGuests(numericEventId),
+          pollsApi.getActivePoll(numericEventId).catch((error: unknown) => {
+            const message = getApiErrorMessage(error, "");
+            const is404 =
+              typeof error === "object" &&
+              error !== null &&
+              "response" in error &&
+              typeof error.response === "object" &&
+              error.response !== null &&
+              "status" in error.response &&
+              error.response.status === 404;
+
+            if (is404 || message.includes("не найден")) {
+              return null;
+            }
+
+            throw error;
+          }),
+        ]);
+
+        setEventData(eventResponse);
+        setGuests(guestsResponse);
+        setActivePoll(pollResponse);
+        setLastPoll(pollResponse);
+      } catch (error: unknown) {
+        setError(getApiErrorMessage(error, "Не удалось загрузить данные мероприятия"));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void loadData();
+  }, [eventId, numericEventId]);
+
+  useEffect(() => {
+    if (!isConnected || !eventId || Number.isNaN(numericEventId)) {
+      return;
+    }
+
+    const unsubscribeRsvp = subscribe<RsvpCountersResponse>({
+      destination: `/topic/events/${numericEventId}/rsvp-counters`,
+      onMessage: (payload) => {
+        setLiveCounters(payload);
+      },
+    });
+
+    const unsubscribeActivePoll = subscribe<PollLiveEventResponse>({
+      destination: `/topic/events/${numericEventId}/polls/active`,
+      onMessage: (payload) => {
+        if (payload.type === "POLL_STARTED" || payload.type === "POLL_UPDATED") {
+          setActivePoll(payload.poll);
+          setLastPoll(payload.poll);
+        }
+
+        if (payload.type === "POLL_CLOSED") {
+          setActivePoll(null);
+          setLastPoll(payload.poll);
+        }
+      },
+    });
+
+    return () => {
+      unsubscribeRsvp();
+      unsubscribeActivePoll();
+    };
+  }, [eventId, isConnected, numericEventId, subscribe]);
+
+  useEffect(() => {
+    if (!isConnected || !activePoll?.id) {
+      return;
+    }
+
+    const unsubscribePollResults = subscribe<PollLiveEventResponse>({
+      destination: `/topic/polls/${activePoll.id}/results`,
+      onMessage: (payload) => {
+        setLastPoll(payload.poll);
+
+        if (payload.poll.status === "ACTIVE") {
+          setActivePoll(payload.poll);
+        }
+      },
+    });
+
+    return () => {
+      unsubscribePollResults();
+    };
+  }, [activePoll?.id, isConnected, subscribe]);
+
+  const buildCounterInvitations = (): InvitationResponse[] => {
+    if (!liveCounters) {
+      return guests;
+    }
+
+    const currentGoing = guests.filter((item) => item.rsvpStatus === "GOING").length;
+    const currentMaybe = guests.filter((item) => item.rsvpStatus === "MAYBE").length;
+    const currentDeclined = guests.filter((item) => item.rsvpStatus === "DECLINED").length;
+    const currentPending = guests.filter((item) => item.rsvpStatus === "PENDING").length;
+
+    if (
+      currentGoing === liveCounters.goingCount &&
+      currentMaybe === liveCounters.maybeCount &&
+      currentDeclined === liveCounters.declinedCount &&
+      currentPending === liveCounters.pendingCount
+    ) {
+      return guests;
+    }
+
+    const normalizedStatuses: RsvpStatus[] = [
+      ...Array.from({ length: liveCounters.goingCount }, () => "GOING" as const),
+      ...Array.from({ length: liveCounters.maybeCount }, () => "MAYBE" as const),
+      ...Array.from({ length: liveCounters.declinedCount }, () => "DECLINED" as const),
+      ...Array.from({ length: liveCounters.pendingCount }, () => "PENDING" as const),
+    ];
+
+    return guests.map((guest, index) => ({
+      ...guest,
+      rsvpStatus: normalizedStatuses[index] ?? guest.rsvpStatus,
+    }));
+  };
+
+  const handleResendInvitations = async () => {
+    if (!eventId || Number.isNaN(numericEventId)) {
+      return;
+    }
+
+    setIsResending(true);
+    setGuestsMessage(null);
+
+    try {
+      const response = await invitationsApi.resendInvitations(numericEventId);
+      setGuests(response);
+      setGuestsMessage("Приглашения были повторно отправлены");
+      setGuestsMessageType("success");
+    } catch (error: unknown) {
+      setGuestsMessage(getApiErrorMessage(error, "Не удалось повторно отправить приглашения"));
+      setGuestsMessageType("error");
+    } finally {
+      setIsResending(false);
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm text-slate-600 shadow-sm">
+        Загрузка данных мероприятия...
+      </div>
+    );
+  }
+
+  if (error || !eventData) {
+    return (
+      <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        {error ?? "Мероприятие не найдено"}
+      </div>
+    );
+  }
+
+  const counterInvitations = buildCounterInvitations();
+
+  return (
+    <div className="space-y-8">
+      {!isConnected ? (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          Live-обновления временно недоступны. Пытаемся подключиться...
+        </div>
+      ) : null}
+
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          Управление мероприятием
+        </h1>
+        <p className="mt-2 text-sm text-slate-500">
+          Просматривайте детали события, контролируйте ответы гостей и запускайте опросы.
+        </p>
+      </div>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-bold text-slate-900">Детали</h2>
+
+        <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
+          <EventDetailsCard event={eventData} />
+          <EventMapPreview lat={eventData.lat} lon={eventData.lon} />
+        </div>
+      </section>
+
+      <section className="space-y-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h2 className="text-xl font-bold text-slate-900">Гости</h2>
+
+          <div className="w-full sm:w-64">
+            <Button type="button" isLoading={isResending} onClick={handleResendInvitations}>
+              Повторно отправить приглашения
+            </Button>
+          </div>
+        </div>
+
+        {guestsMessage ? (
+          <div
+            className={[
+              "rounded-2xl px-4 py-3 text-sm",
+              guestsMessageType === "success"
+                ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
+                : "border border-red-200 bg-red-50 text-red-700",
+            ].join(" ")}
+          >
+            {guestsMessage}
+          </div>
+        ) : null}
+
+        <RsvpCounters invitations={counterInvitations} />
+        <GuestListTable invitations={guests} />
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-bold text-slate-900">Опросы</h2>
+
+        <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            {activePoll ? (
+              <ActivePollBanner
+                poll={activePoll}
+                onClosed={(closedPoll) => {
+                  setActivePoll(null);
+                  setLastPoll(closedPoll);
+                }}
+              />
+            ) : (
+              <PollCreateForm
+                eventId={numericEventId}
+                onCreated={(poll) => {
+                  setActivePoll(poll);
+                  setLastPoll(poll);
+                }}
+              />
+            )}
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            {lastPoll ? (
+              <PollResultsChart poll={lastPoll} />
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+                Опрос пока не создан.
+              </div>
+            )}
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+};
+
+export default EventManagePage;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\pages\events\GuestInvitationPage.tsx ====================
+
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import invitationsApi from "../../api/invitationsApi";
+import useStomp from "../../hooks/useStomp";
+import GuestEventCard from "../../components/guest/GuestEventCard";
+import GuestRsvpPanel from "../../components/guest/GuestRsvpPanel";
+import GuestLiveCounter from "../../components/guest/GuestLiveCounter";
+import GuestPollModal from "../../components/guest/GuestPollModal";
+import type {
+  GuestInvitationDetailsResponse,
+  RsvpCountersResponse,
+} from "../../types/invitation";
+import type { PollLiveEventResponse } from "../../types/ws";
+import type { PollResponse } from "../../types/poll";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+const GuestInvitationPage = () => {
+  const { eventId, guestToken } = useParams<{
+    eventId: string;
+    guestToken: string;
+  }>();
+
+  const [invitation, setInvitation] = useState<GuestInvitationDetailsResponse | null>(null);
+  const [counters, setCounters] = useState<RsvpCountersResponse | null>(null);
+  const [activePoll, setActivePoll] = useState<PollResponse | null>(null);
+  const [isPollOpen, setIsPollOpen] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const numericEventId = Number(eventId);
+
+  const { isConnected, subscribe } = useStomp({
+    guestToken,
+    enabled: Boolean(guestToken && eventId),
+  });
+
+  useEffect(() => {
+    const loadInvitation = async () => {
+      if (!guestToken || !eventId || Number.isNaN(numericEventId)) {
+        setError("Некорректная ссылка приглашения");
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const response = await invitationsApi.getGuestInvitation(numericEventId, guestToken);
+        setInvitation(response);
+      } catch (error: unknown) {
+        setError(getApiErrorMessage(error, "Не удалось загрузить приглашение"));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    void loadInvitation();
+  }, [eventId, guestToken, numericEventId]);
+
+  useEffect(() => {
+    if (!isConnected || !eventId || Number.isNaN(numericEventId)) {
+      return;
+    }
+
+    const unsubscribeRsvp = subscribe<RsvpCountersResponse>({
+      destination: `/topic/events/${numericEventId}/rsvp-counters`,
+      onMessage: (payload) => {
+        setCounters(payload);
+      },
+    });
+
+    const unsubscribePoll = subscribe<PollLiveEventResponse>({
+      destination: `/topic/events/${numericEventId}/polls/active`,
+      onMessage: (payload) => {
+        if (payload.type === "POLL_STARTED" || payload.type === "POLL_UPDATED") {
+          setActivePoll(payload.poll);
+          setIsPollOpen(true);
+        }
+
+        if (payload.type === "POLL_CLOSED") {
+          setActivePoll(null);
+          setIsPollOpen(false);
+        }
+      },
+    });
+
+    return () => {
+      unsubscribeRsvp();
+      unsubscribePoll();
+    };
+  }, [eventId, isConnected, numericEventId, subscribe]);
+
+  if (isLoading) {
+    return (
+      <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm text-slate-600 shadow-sm">
+        Загрузка приглашения...
+      </div>
+    );
+  }
+
+  if (error || !invitation || !guestToken) {
+    return (
+      <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
+        {error ?? "Приглашение не найдено"}
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="space-y-6">
+        {!isConnected ? (
+          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Live-обновления пока недоступны. Пытаемся подключиться...
+          </div>
+        ) : null}
+
+        <GuestEventCard invitation={invitation} />
+
+        <GuestRsvpPanel
+          eventId={invitation.eventId}
+          guestToken={guestToken}
+          currentStatus={invitation.rsvpStatus}
+          onUpdated={(updatedInvitation) => {
+            setInvitation(updatedInvitation);
+          }}
+        />
+
+        <GuestLiveCounter counters={counters} />
+      </div>
+
+      {activePoll ? (
+        <GuestPollModal
+          poll={activePoll}
+          guestToken={guestToken}
+          isOpen={isPollOpen}
+          onClose={() => setIsPollOpen(false)}
+          onVoted={(updatedPoll) => {
+            setActivePoll(updatedPoll);
+          }}
+        />
+      ) : null}
+    </>
+  );
+};
+
+export default GuestInvitationPage;
+
+==================== C:\IdeaProjects\EventFlow\frontend\src\utils\apiError.ts ====================
+
+import type { AxiosError } from "axios";
+
+export interface BackendErrorResponse {
+  message?: string;
+  errors?: Record<string, string>;
+}
+
+export const getApiErrorData = (
+  error: unknown
+): BackendErrorResponse | null => {
+  const axiosError = error as AxiosError<BackendErrorResponse>;
+  return axiosError.response?.data ?? null;
+};
+
+export const getApiErrorMessage = (
+  error: unknown,
+  fallbackMessage: string
+): string => {
+  const data = getApiErrorData(error);
+
+  if (data?.message && typeof data.message === "string" && data.message.trim()) {
+    return data.message;
+  }
+
+  return fallbackMessage;
+};
