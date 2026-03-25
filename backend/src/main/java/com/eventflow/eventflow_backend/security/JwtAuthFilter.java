@@ -4,20 +4,6 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
-import java.io.IOException;
-import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpHeaders;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
-import org.springframework.stereotype.Component;
-import org.springframework.util.AntPathMatcher;
-import org.springframework.web.filter.OncePerRequestFilter;
-
-import jakarta.servlet.FilterChain;
-import jakarta.servlet.ServletException;
-import jakarta.servlet.http.HttpServletRequest;
-import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpHeaders;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -42,21 +28,12 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
         String path = request.getServletPath();
-
-        return pathMatcher.match("/api/v1/auth/register", path)
-                || pathMatcher.match("/api/v1/auth/login", path)
-                || pathMatcher.match("/api/v1/auth/verify-email", path)
-                || pathMatcher.match("/api/v1/auth/resend-verification", path)
-
-                || pathMatcher.match("/api/v1/events/*/invite/*", path)
-                || pathMatcher.match("/api/v1/events/*/invite/*/rsvp", path)
-                || pathMatcher.match("/api/v1/polls/*/vote", path)
-
-                || pathMatcher.match("/v3/api-docs/**", path)
-                || pathMatcher.match("/swagger-ui/**", path)
-                || pathMatcher.match("/swagger-ui.html", path)
-                || pathMatcher.match("/ws/**", path)
-                || pathMatcher.match("/error", path);
+        for (String pattern : SecurityConstants.PUBLIC_URLS) {
+            if (pathMatcher.match(pattern, path)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

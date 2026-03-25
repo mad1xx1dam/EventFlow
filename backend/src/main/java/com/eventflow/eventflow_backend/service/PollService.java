@@ -26,6 +26,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -131,18 +133,21 @@ public class PollService {
         Map<Long, Long> choices = pollRedisService.getChoices(pollId);
         OffsetDateTime now = OffsetDateTime.now();
 
+        List<PollVote> existingVotes = pollVoteRepository.findAllByPollId(pollId);
+        Map<Long, PollVote> existingVotesMap = existingVotes.stream()
+                .collect(Collectors.toMap(v -> v.getEventGuest().getId(), v -> v));
+
+        List<PollVote> votesToSave = new ArrayList<>();
+
         for (Map.Entry<Long, Long> entry : choices.entrySet()) {
             Long eventGuestId = entry.getKey();
             Long pollOptionId = entry.getValue();
 
             EventGuest eventGuest = eventGuestRepository.findById(eventGuestId)
                     .orElseThrow(() -> new ResourceNotFoundException("Приглашение не найдено"));
-
             PollOption pollOption = getPollOptionOrThrow(pollOptionId);
 
-            PollVote pollVote = pollVoteRepository.findByPollIdAndEventGuestId(pollId, eventGuestId)
-                    .orElseGet(PollVote::new);
-
+            PollVote pollVote = existingVotesMap.getOrDefault(eventGuestId, new PollVote());
             pollVote.setPoll(poll);
             pollVote.setEventGuest(eventGuest);
             pollVote.setPollOption(pollOption);
@@ -152,8 +157,10 @@ public class PollService {
             }
             pollVote.setUpdatedAt(now);
 
-            pollVoteRepository.save(pollVote);
+            votesToSave.add(pollVote);
         }
+
+        pollVoteRepository.saveAll(votesToSave); // один запрос на сохранение всех голосов
 
         poll.setStatus(PollStatus.CLOSED);
         poll.setClosedAt(now);

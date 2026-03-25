@@ -16,6 +16,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.multipart.MultipartFile;
 
 @Service
@@ -69,17 +71,20 @@ public class EventService {
 
         if (poster != null && !poster.isEmpty()) {
             String oldPosterPath = event.getPosterPath();
-
             FileUploadResponse uploadResponse = minioService.uploadPoster(poster);
             event.setPosterPath(uploadResponse.getObjectPath());
 
             if (oldPosterPath != null && !oldPosterPath.isBlank()) {
-                minioService.deleteObject(oldPosterPath);
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        minioService.deleteObject(oldPosterPath);
+                    }
+                });
             }
         }
 
         event.setUpdatedAt(OffsetDateTime.now());
-
         Event savedEvent = eventRepository.save(event);
         return buildEventResponse(savedEvent);
     }

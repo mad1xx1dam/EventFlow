@@ -35,23 +35,7 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authenticationProvider(authenticationProvider())
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(
-                                "/api/v1/auth/register",
-                                "/api/v1/auth/login",
-                                "/api/v1/auth/verify-email",
-                                "/api/v1/auth/resend-verification",
-
-                                "/api/v1/events/*/invite/*",
-                                "/api/v1/events/*/invite/*/rsvp",
-                                "/api/v1/polls/*/vote",
-
-                                "/v3/api-docs/**",
-                                "/swagger-ui/**",
-                                "/swagger-ui.html",
-                                "/ws/**",
-                                "/error"
-                        ).permitAll()
-
+                        .requestMatchers(SecurityConstants.PUBLIC_URLS).permitAll()
                         .requestMatchers("/api/v1/auth/me").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/api/v1/dashboard/**").hasAnyRole("USER", "ADMIN")
                         .requestMatchers("/api/v1/calendar/**").hasAnyRole("USER", "ADMIN")
