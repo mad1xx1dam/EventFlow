@@ -11,12 +11,13 @@ import org.springframework.stereotype.Component;
 @Setter
 public class MinioProperties {
 
-    private String url;
+    private String publicBaseUrl;
+    private String endpoint;
     private String accessKey;
     private String secretKey;
     private String bucket;
 
     public String getPublicBaseUrl() {
-        return url + "/" + bucket;
+        return publicBaseUrl + "/" + bucket;
     }
 }
