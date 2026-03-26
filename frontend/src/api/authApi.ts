@@ -42,3 +42,5 @@ export const authApi = {
     return data;
   },
 };
+
+export default authApi;

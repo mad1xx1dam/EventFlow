@@ -3,6 +3,7 @@ import type { AxiosError } from "axios";
 export interface BackendErrorResponse {
   message?: string;
   errors?: Record<string, string>;
+  validationErrors?: Record<string, string>;
 }
 
 export const getApiErrorData = (
@@ -30,4 +31,20 @@ export const getApiErrorStatus = (error: unknown): number | null => {
   return typeof axiosError.response?.status === "number"
     ? axiosError.response.status
     : null;
+};
+
+export const getApiValidationErrors = (
+  error: unknown
+): Record<string, string> | null => {
+  const data = getApiErrorData(error);
+
+  if (data?.validationErrors && typeof data.validationErrors === "object") {
+    return data.validationErrors;
+  }
+
+  if (data?.errors && typeof data.errors === "object") {
+    return data.errors;
+  }
+
+  return null;
 };

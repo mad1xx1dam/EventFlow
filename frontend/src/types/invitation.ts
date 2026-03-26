@@ -32,6 +32,10 @@ export interface GuestInvitationDetailsResponse {
   posterUrl: string | null;
   guestEmail: string;
   rsvpStatus: RsvpStatus;
+  goingCount: number;
+  maybeCount: number;
+  declinedCount: number;
+  pendingCount: number;
 }
 
 export interface RsvpCountersResponse {

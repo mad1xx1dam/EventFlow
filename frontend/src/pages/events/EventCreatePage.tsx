@@ -5,6 +5,9 @@ import invitationsApi from "../../api/invitationsApi";
 import EventForm from "../../components/events/EventForm";
 import GuestEmailsTextarea from "../../components/events/GuestEmailsTextarea";
 import type { EventRequest } from "../../types/event";
+import { getApiErrorMessage } from "../../utils/apiError";
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
 
 const toDefaultDateTimeLocal = (dateParam: string | null) => {
   if (!dateParam) {
@@ -24,15 +27,47 @@ const toDefaultDateTimeLocal = (dateParam: string | null) => {
 };
 
 const parseGuestEmails = (value: string) => {
-  return Array.from(
-    new Set(
-      value
-        .split(/[\s,;]+/)
-        .map((item) => item.trim())
-        .filter(Boolean)
-    )
-  );
+  const rawTokens = value
+    .split(/[\s,;]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
+  const validEmails: string[] = [];
+  const invalidEmails: string[] = [];
+  const duplicateEmails: string[] = [];
+
+  const seen = new Set<string>();
+  const duplicateSeen = new Set<string>();
+
+  for (const token of rawTokens) {
+    if (!EMAIL_PATTERN.test(token)) {
+      invalidEmails.push(token);
+      continue;
+    }
+
+    if (seen.has(token)) {
+      if (!duplicateSeen.has(token)) {
+        duplicateEmails.push(token);
+        duplicateSeen.add(token);
+      }
+      continue;
+    }
+
+    seen.add(token);
+    validEmails.push(token);
+  }
+
+  return {
+    validEmails,
+    invalidEmails,
+    duplicateEmails,
+  };
 };
+
+interface EventManageLocationState {
+  pageMessage?: string;
+  pageMessageType?: "success" | "warning" | "error";
+}
 
 const EventCreatePage = () => {
   const navigate = useNavigate();
@@ -56,16 +91,45 @@ const EventCreatePage = () => {
 
     try {
       const createdEvent = await eventsApi.createEvent(event, poster);
+      const parsedEmails = parseGuestEmails(guestEmails);
 
-      const emails = parseGuestEmails(guestEmails);
+      const locationState: EventManageLocationState = {
+        pageMessage: "Мероприятие успешно создано",
+        pageMessageType: "success",
+      };
 
-      if (emails.length > 0) {
-        await invitationsApi.createInvitations(createdEvent.id, {
-          guestEmails: emails,
-        });
+      if (parsedEmails.invalidEmails.length > 0 && parsedEmails.validEmails.length === 0) {
+        locationState.pageMessage =
+          "Мероприятие создано, но приглашения не отправлены: все введённые email некорректны";
+        locationState.pageMessageType = "warning";
+      } else if (parsedEmails.validEmails.length > 0) {
+        try {
+          await invitationsApi.createInvitations(createdEvent.id, {
+            guestEmails: parsedEmails.validEmails,
+          });
+
+          if (parsedEmails.invalidEmails.length > 0) {
+            locationState.pageMessage =
+              "Мероприятие создано, приглашения отправлены только на корректные email";
+            locationState.pageMessageType = "warning";
+          } else {
+            locationState.pageMessage =
+              "Мероприятие успешно создано, приглашения отправлены";
+            locationState.pageMessageType = "success";
+          }
+        } catch (error: unknown) {
+          locationState.pageMessage = getApiErrorMessage(
+            error,
+            "Мероприятие создано, но приглашения отправить не удалось"
+          );
+          locationState.pageMessageType = "warning";
+        }
       }
 
-      navigate("/dashboard");
+      navigate(`/events/${createdEvent.id}/manage`, {
+        replace: true,
+        state: locationState,
+      });
     } finally {
       setIsSubmitting(false);
     }

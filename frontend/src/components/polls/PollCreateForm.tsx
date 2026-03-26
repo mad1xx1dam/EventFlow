@@ -3,7 +3,17 @@ import pollsApi from "../../api/pollsApi";
 import Button from "../common/Button";
 import Input from "../common/Input";
 import type { PollResponse } from "../../types/poll";
-import { getApiErrorMessage } from "../../utils/apiError";
+import {
+  getApiErrorData,
+  getApiErrorMessage,
+  getApiValidationErrors,
+} from "../../utils/apiError";
+
+interface PollCreateFormErrors {
+  question?: string;
+  options?: string;
+  common?: string;
+}
 
 interface PollCreateFormProps {
   eventId: number;
@@ -13,7 +23,7 @@ interface PollCreateFormProps {
 const PollCreateForm = ({ eventId, onCreated }: PollCreateFormProps) => {
   const [question, setQuestion] = useState("");
   const [options, setOptions] = useState(["", ""]);
-  const [error, setError] = useState<string | null>(null);
+  const [errors, setErrors] = useState<PollCreateFormErrors>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const updateOption = (index: number, value: string) => {
@@ -40,18 +50,23 @@ const PollCreateForm = ({ eventId, onCreated }: PollCreateFormProps) => {
     const normalizedQuestion = question.trim();
     const normalizedOptions = options.map((option) => option.trim()).filter(Boolean);
 
+    const nextErrors: PollCreateFormErrors = {};
+
     if (!normalizedQuestion) {
-      setError("Вопрос обязателен для заполнения");
-      return;
+      nextErrors.question = "Вопрос обязателен для заполнения";
     }
 
     if (normalizedOptions.length < 2) {
-      setError("Нужно указать минимум два варианта ответа");
+      nextErrors.options = "Нужно указать минимум два варианта ответа";
+    }
+
+    if (Object.keys(nextErrors).length > 0) {
+      setErrors(nextErrors);
       return;
     }
 
     setIsSubmitting(true);
-    setError(null);
+    setErrors({});
 
     try {
       const poll = await pollsApi.createPoll(eventId, {
@@ -61,9 +76,33 @@ const PollCreateForm = ({ eventId, onCreated }: PollCreateFormProps) => {
 
       setQuestion("");
       setOptions(["", ""]);
+      setErrors({});
       onCreated(poll);
     } catch (error: unknown) {
-      setError(getApiErrorMessage(error, "Не удалось создать опрос"));
+      const data = getApiErrorData(error);
+      const validationErrors = getApiValidationErrors(error);
+
+      if (validationErrors) {
+        setErrors({
+          question:
+            typeof validationErrors.question === "string"
+              ? validationErrors.question
+              : undefined,
+          options:
+            typeof validationErrors.options === "string"
+              ? validationErrors.options
+              : undefined,
+          common:
+            data?.message &&
+            data.message !== "Ошибка валидации входных данных"
+              ? data.message
+              : undefined,
+        });
+      } else {
+        setErrors({
+          common: getApiErrorMessage(error, "Не удалось создать опрос"),
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -71,9 +110,9 @@ const PollCreateForm = ({ eventId, onCreated }: PollCreateFormProps) => {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
-      {error ? (
+      {errors.common ? (
         <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+          {errors.common}
         </div>
       ) : null}
 
@@ -84,6 +123,7 @@ const PollCreateForm = ({ eventId, onCreated }: PollCreateFormProps) => {
         placeholder="Введите вопрос для опроса"
         value={question}
         onChange={(event) => setQuestion(event.target.value)}
+        error={errors.question}
       />
 
       <div className="space-y-3">
@@ -97,6 +137,12 @@ const PollCreateForm = ({ eventId, onCreated }: PollCreateFormProps) => {
             Добавить вариант
           </button>
         </div>
+
+        {errors.options ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errors.options}
+          </div>
+        ) : null}
 
         {options.map((option, index) => (
           <div key={`option-${index}`} className="flex items-end gap-3">

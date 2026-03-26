@@ -1,4 +1,5 @@
 import type { GuestInvitationDetailsResponse, RsvpStatus } from "../../types/invitation";
+import EventMapPreview from "../map/EventMapPreview";
 
 interface GuestEventCardProps {
   invitation: GuestInvitationDetailsResponse;
@@ -51,8 +52,13 @@ const GuestEventCard = ({ invitation }: GuestEventCardProps) => {
         <span className="font-medium text-slate-700">Адрес:</span> {invitation.address}
       </div>
 
+      <div className="mt-5">
+        <EventMapPreview lat={invitation.lat} lon={invitation.lon} />
+      </div>
+
       <div className="mt-4 text-sm text-slate-500">
-        Приглашение отправлено на <span className="font-medium text-slate-700">{invitation.guestEmail}</span>
+        Приглашение отправлено на{" "}
+        <span className="font-medium text-slate-700">{invitation.guestEmail}</span>
       </div>
     </div>
   );

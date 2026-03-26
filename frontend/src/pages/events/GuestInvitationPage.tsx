@@ -1,17 +1,20 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import invitationsApi from "../../api/invitationsApi";
-import useStomp from "../../hooks/useStomp";
 import GuestEventCard from "../../components/guest/GuestEventCard";
-import GuestRsvpPanel from "../../components/guest/GuestRsvpPanel";
 import GuestLiveCounter from "../../components/guest/GuestLiveCounter";
 import GuestPollModal from "../../components/guest/GuestPollModal";
+import GuestRsvpPanel from "../../components/guest/GuestRsvpPanel";
+import useStomp from "../../hooks/useStomp";
 import type {
   GuestInvitationDetailsResponse,
   RsvpCountersResponse,
 } from "../../types/invitation";
-import type { PollLiveEventResponse } from "../../types/ws";
 import type { PollResponse } from "../../types/poll";
+import type {
+  EventRsvpSnapshotMessage,
+  PollLiveEventResponse,
+} from "../../types/ws";
 import { getApiErrorMessage } from "../../utils/apiError";
 
 const GuestInvitationPage = () => {
@@ -48,8 +51,15 @@ const GuestInvitationPage = () => {
       try {
         const response = await invitationsApi.getGuestInvitation(numericEventId, guestToken);
         setInvitation(response);
-      } catch (error: unknown) {
-        setError(getApiErrorMessage(error, "Не удалось загрузить приглашение"));
+        setCounters({
+          eventId: response.eventId,
+          goingCount: Number(response.goingCount),
+          maybeCount: Number(response.maybeCount),
+          declinedCount: Number(response.declinedCount),
+          pendingCount: Number(response.pendingCount),
+        });
+      } catch (loadError: unknown) {
+        setError(getApiErrorMessage(loadError, "Не удалось загрузить приглашение"));
       } finally {
         setIsLoading(false);
       }
@@ -63,25 +73,30 @@ const GuestInvitationPage = () => {
       return;
     }
 
-    const unsubscribeRsvp = subscribe<RsvpCountersResponse>({
-      destination: `/topic/events/${numericEventId}/rsvp-counters`,
+    const unsubscribeRsvp = subscribe<EventRsvpSnapshotMessage>({
+      destination: `/topic/events/${numericEventId}/rsvp`,
       onMessage: (payload) => {
-        setCounters(payload);
+        setCounters({
+          eventId: payload.eventId,
+          goingCount: Number(payload.goingCount),
+          maybeCount: Number(payload.maybeCount),
+          declinedCount: Number(payload.declinedCount),
+          pendingCount: Number(payload.pendingCount),
+        });
       },
     });
 
     const unsubscribePoll = subscribe<PollLiveEventResponse>({
       destination: `/topic/events/${numericEventId}/polls/active`,
       onMessage: (payload) => {
-        if (payload.type === "POLL_STARTED" || payload.type === "POLL_UPDATED") {
-          setActivePoll(payload.poll);
-          setIsPollOpen(true);
-        }
-
         if (payload.type === "POLL_CLOSED") {
           setActivePoll(null);
           setIsPollOpen(false);
+          return;
         }
+
+        setActivePoll(payload.poll);
+        setIsPollOpen(true);
       },
     });
 
@@ -90,6 +105,29 @@ const GuestInvitationPage = () => {
       unsubscribePoll();
     };
   }, [eventId, isConnected, numericEventId, subscribe]);
+
+  useEffect(() => {
+    if (!isConnected || !activePoll?.id) {
+      return;
+    }
+
+    const unsubscribePollResults = subscribe<PollLiveEventResponse>({
+      destination: `/topic/polls/${activePoll.id}/results`,
+      onMessage: (payload) => {
+        if (payload.type === "POLL_CLOSED") {
+          setActivePoll(null);
+          setIsPollOpen(false);
+          return;
+        }
+
+        setActivePoll(payload.poll);
+      },
+    });
+
+    return () => {
+      unsubscribePollResults();
+    };
+  }, [activePoll?.id, isConnected, subscribe]);
 
   if (isLoading) {
     return (
@@ -112,7 +150,7 @@ const GuestInvitationPage = () => {
       <div className="space-y-6">
         {!isConnected ? (
           <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-            Live-обновления пока недоступны. Пытаемся подключиться...
+            Live-обновления временно недоступны. Пытаемся подключиться...
           </div>
         ) : null}
 
@@ -124,6 +162,13 @@ const GuestInvitationPage = () => {
           currentStatus={invitation.rsvpStatus}
           onUpdated={(updatedInvitation) => {
             setInvitation(updatedInvitation);
+            setCounters({
+              eventId: updatedInvitation.eventId,
+              goingCount: Number(updatedInvitation.goingCount),
+              maybeCount: Number(updatedInvitation.maybeCount),
+              declinedCount: Number(updatedInvitation.declinedCount),
+              pendingCount: Number(updatedInvitation.pendingCount),
+            });
           }}
         />
 

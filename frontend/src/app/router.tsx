@@ -7,11 +7,10 @@ import DashboardPage from "../pages/dashboard/DashboardPage";
 import EventCreatePage from "../pages/events/EventCreatePage";
 import EventEditPage from "../pages/events/EventEditPage";
 import EventManagePage from "../pages/events/EventManagePage";
+import GuestInvitationPage from "../pages/events/GuestInvitationPage";
 import AuthLayout from "../layouts/AuthLayout";
 import CabinetLayout from "../layouts/CabinetLayout";
 import GuestLayout from "../layouts/GuestLayout";
-
-const guestInvitationPageElement = <div>Guest Invitation</div>;
 
 const notFoundPageElement = (
   <div className="flex min-h-[60vh] flex-col items-center justify-center text-center">
@@ -73,7 +72,7 @@ export const router = createBrowserRouter([
     children: [
       {
         path: "/events/:eventId/invite/:guestToken",
-        element: guestInvitationPageElement,
+        element: <GuestInvitationPage />,
       },
     ],
   },

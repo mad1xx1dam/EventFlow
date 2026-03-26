@@ -5,7 +5,7 @@ import Button from "../common/Button";
 import EventMapPicker from "../map/EventMapPicker";
 import LocationSearchInput from "../map/LocationSearchInput";
 import EventPosterUploader from "./EventPosterUploader";
-import { getApiErrorData } from "../../utils/apiError";
+import { getApiErrorData, getApiValidationErrors } from "../../utils/apiError";
 
 interface EventFormState {
   title: string;
@@ -123,32 +123,43 @@ const EventForm = ({
         poster: form.poster,
       });
     } catch (error: unknown) {
-      const data = getApiErrorData(error);
-      const fallbackMessage =
-        mode === "create"
-          ? "Не удалось создать мероприятие"
-          : "Не удалось обновить мероприятие";
+        const data = getApiErrorData(error);
+        const validationErrors = getApiValidationErrors(error);
 
-      if (data?.errors) {
-        setErrors({
-          title: typeof data.errors.title === "string" ? data.errors.title : undefined,
-          startsAt:
-            typeof data.errors.startsAt === "string" ? data.errors.startsAt : undefined,
-          address: typeof data.errors.address === "string" ? data.errors.address : undefined,
-          common:
-            data.message && data.message !== "Ошибка валидации входных данных"
-              ? data.message
-              : undefined,
-        });
-      } else {
-        setErrors({
-          common:
-            typeof data?.message === "string" && data.message.trim()
-              ? data.message
-              : fallbackMessage,
-        });
+        const fallbackMessage =
+          mode === "create"
+            ? "Не удалось создать мероприятие"
+            : "Не удалось обновить мероприятие";
+
+        if (validationErrors) {
+          setErrors({
+            title:
+              typeof validationErrors.title === "string"
+                ? validationErrors.title
+                : undefined,
+            startsAt:
+              typeof validationErrors.startsAt === "string"
+                ? validationErrors.startsAt
+                : undefined,
+            address:
+              typeof validationErrors.address === "string"
+                ? validationErrors.address
+                : undefined,
+            common:
+              data?.message &&
+              data.message !== "Ошибка валидации входных данных"
+                ? data.message
+                : undefined,
+          });
+        } else {
+          setErrors({
+            common:
+              typeof data?.message === "string" && data.message.trim()
+                ? data.message
+                : fallbackMessage,
+          });
+        }
       }
-    }
   };
 
   return (

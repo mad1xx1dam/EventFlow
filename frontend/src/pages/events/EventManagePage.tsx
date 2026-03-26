@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useLocation, useParams } from "react-router-dom";
 import eventsApi from "../../api/eventsApi";
 import invitationsApi from "../../api/invitationsApi";
 import pollsApi from "../../api/pollsApi";
 import EventDetailsCard from "../../components/events/EventDetailsCard";
+import GuestEmailsTextarea from "../../components/events/GuestEmailsTextarea";
 import RsvpCounters from "../../components/guests/RsvpCounters";
 import GuestListTable from "../../components/guests/GuestListTable";
 import EventMapPreview from "../../components/map/EventMapPreview";
@@ -12,294 +13,365 @@ import PollCreateForm from "../../components/polls/PollCreateForm";
 import PollResultsChart from "../../components/polls/PollResultsChart";
 import Button from "../../components/common/Button";
 import type { EventResponse } from "../../types/event";
-import type {
-  InvitationResponse,
-  RsvpCountersResponse,
-  RsvpStatus,
-} from "../../types/invitation";
+import type { InvitationResponse } from "../../types/invitation";
 import type { PollResponse } from "../../types/poll";
-import type { PollLiveEventResponse } from "../../types/ws";
+import type { EventRsvpSnapshotMessage, PollLiveEventResponse } from "../../types/ws";
 import useStomp from "../../hooks/useStomp";
 import { getApiErrorMessage, getApiErrorStatus } from "../../utils/apiError";
 
+interface EventManageLocationState {
+  pageMessage?: string;
+  pageMessageType?: "success" | "warning" | "error";
+}
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/i;
+
+const parseGuestEmails = (value: string) => {
+  const rawTokens = value
+    .split(/[\s,;]+/)
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+
+  const validEmails: string[] = [];
+  const invalidEmails: string[] = [];
+  const duplicateEmails: string[] = [];
+
+  const seen = new Set<string>();
+  const duplicateSeen = new Set<string>();
+
+  for (const token of rawTokens) {
+    if (!EMAIL_PATTERN.test(token)) {
+      invalidEmails.push(token);
+      continue;
+    }
+
+    if (seen.has(token)) {
+      if (!duplicateSeen.has(token)) {
+        duplicateEmails.push(token);
+        duplicateSeen.add(token);
+      }
+      continue;
+    }
+
+    seen.add(token);
+    validEmails.push(token);
+  }
+
+  return {
+    validEmails,
+    invalidEmails,
+    duplicateEmails,
+  };
+};
+
+const getCountersFromInvitations = (invitations: InvitationResponse[]) => {
+  return invitations.reduce(
+    (acc, invitation) => {
+      if (invitation.rsvpStatus === "GOING") {
+        acc.goingCount += 1;
+      }
+
+      if (invitation.rsvpStatus === "MAYBE") {
+        acc.maybeCount += 1;
+      }
+
+      if (invitation.rsvpStatus === "DECLINED") {
+        acc.declinedCount += 1;
+      }
+
+      if (invitation.rsvpStatus === "PENDING") {
+        acc.pendingCount += 1;
+      }
+
+      return acc;
+    },
+    {
+      goingCount: 0,
+      maybeCount: 0,
+      declinedCount: 0,
+      pendingCount: 0,
+    }
+  );
+};
+
 const EventManagePage = () => {
   const { eventId } = useParams<{ eventId: string }>();
+  const location = useLocation();
+  const locationState = location.state as EventManageLocationState | null;
+
+  const numericEventId = Number(eventId);
+  const accessToken = localStorage.getItem("accessToken");
 
   const [eventData, setEventData] = useState<EventResponse | null>(null);
   const [guests, setGuests] = useState<InvitationResponse[]>([]);
   const [activePoll, setActivePoll] = useState<PollResponse | null>(null);
   const [lastPoll, setLastPoll] = useState<PollResponse | null>(null);
-  const [liveCounters, setLiveCounters] = useState<RsvpCountersResponse | null>(null);
+  const [guestEmails, setGuestEmails] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isResending, setIsResending] = useState(false);
-  const [guestsMessage, setGuestsMessage] = useState<string | null>(null);
-  const [guestsMessageType, setGuestsMessageType] = useState<"success" | "error">("success");
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [guestsMessage, setGuestsMessage] = useState<string | null>(locationState?.pageMessage ?? null);
+  const [guestsMessageType, setGuestsMessageType] = useState<
+    "success" | "warning" | "error" | null
+  >(locationState?.pageMessageType ?? null);
+  const [isSubmittingGuests, setIsSubmittingGuests] = useState(false);
 
-  const numericEventId = useMemo(() => Number(eventId), [eventId]);
-  const token = localStorage.getItem("accessToken");
-
-  const { isConnected, subscribe } = useStomp({
-    token,
-    enabled: Boolean(token && eventId),
+  const { subscribe } = useStomp({
+    token: accessToken,
+    enabled: Boolean(accessToken),
   });
 
+  const counters = useMemo(() => getCountersFromInvitations(guests), [guests]);
+
   useEffect(() => {
-    const loadData = async () => {
+    const loadPage = async () => {
       if (!eventId || Number.isNaN(numericEventId)) {
-        setError("Идентификатор мероприятия не найден");
+        setLoadError("Некорректный идентификатор мероприятия");
         setIsLoading(false);
         return;
       }
 
       setIsLoading(true);
-      setError(null);
+      setLoadError(null);
 
       try {
-        const [eventResponse, guestsResponse, pollResponse] = await Promise.all([
+        const [eventResponse, guestsResponse] = await Promise.all([
           eventsApi.getEventById(numericEventId),
           eventsApi.getEventGuests(numericEventId),
-          pollsApi.getActivePoll(numericEventId).catch((error: unknown) => {
-            const status = getApiErrorStatus(error);
-            const message = getApiErrorMessage(error, "").toLowerCase();
-
-            if (status === 404 || message.includes("не найден")) {
-              return null;
-            }
-
-            throw error;
-          }),
         ]);
 
         setEventData(eventResponse);
         setGuests(guestsResponse);
-        setActivePoll(pollResponse);
-        setLastPoll(pollResponse);
+
+        try {
+          const pollResponse = await pollsApi.getActivePoll(numericEventId);
+          setActivePoll(pollResponse);
+          setLastPoll(pollResponse);
+        } catch {
+          setActivePoll(null);
+        }
       } catch (error: unknown) {
-        setError(getApiErrorMessage(error, "Не удалось загрузить данные мероприятия"));
+        const status = getApiErrorStatus(error);
+        setLoadError(
+          status === 404
+            ? "Мероприятие не найдено"
+            : getApiErrorMessage(error, "Не удалось загрузить страницу управления мероприятием")
+        );
       } finally {
         setIsLoading(false);
       }
     };
 
-    void loadData();
+    void loadPage();
   }, [eventId, numericEventId]);
 
   useEffect(() => {
-    if (!isConnected || !eventId || Number.isNaN(numericEventId)) {
+    if (!eventId || Number.isNaN(numericEventId) || !accessToken) {
       return;
     }
 
-    const unsubscribeRsvp = subscribe<RsvpCountersResponse>({
-      destination: `/topic/events/${numericEventId}/rsvp-counters`,
+    const unsubscribeRsvp = subscribe<EventRsvpSnapshotMessage>({
+      destination: `/topic/events/${numericEventId}/rsvp`,
       onMessage: (payload) => {
-        setLiveCounters(payload);
+        setGuests(payload.guests);
       },
     });
 
-    const unsubscribeActivePoll = subscribe<PollLiveEventResponse>({
+    const unsubscribeEventPoll = subscribe<PollLiveEventResponse>({
       destination: `/topic/events/${numericEventId}/polls/active`,
       onMessage: (payload) => {
-        if (payload.type === "POLL_STARTED" || payload.type === "POLL_UPDATED") {
-          setActivePoll(payload.poll);
-          setLastPoll(payload.poll);
-        }
-
         if (payload.type === "POLL_CLOSED") {
           setActivePoll(null);
           setLastPoll(payload.poll);
+          return;
         }
+
+        setActivePoll(payload.poll);
+        setLastPoll(payload.poll);
       },
     });
 
     return () => {
       unsubscribeRsvp();
-      unsubscribeActivePoll();
+      unsubscribeEventPoll();
     };
-  }, [eventId, isConnected, numericEventId, subscribe]);
+  }, [eventId, numericEventId, subscribe, accessToken]);
 
   useEffect(() => {
-    if (!isConnected || !activePoll?.id) {
+    if (!activePoll?.id || !accessToken) {
       return;
     }
 
     const unsubscribePollResults = subscribe<PollLiveEventResponse>({
       destination: `/topic/polls/${activePoll.id}/results`,
       onMessage: (payload) => {
+        setActivePoll(payload.poll);
         setLastPoll(payload.poll);
-
-        if (payload.poll.status === "ACTIVE") {
-          setActivePoll(payload.poll);
-        } else {
-          setActivePoll(null);
-        }
       },
     });
 
     return () => {
       unsubscribePollResults();
     };
-  }, [activePoll?.id, isConnected, subscribe]);
+  }, [activePoll?.id, subscribe, accessToken]);
 
-  const buildCounterInvitations = (): InvitationResponse[] => {
-    if (!liveCounters) {
-      return guests;
-    }
+  const handleAddGuests = async () => {
+    const { validEmails, invalidEmails, duplicateEmails } = parseGuestEmails(guestEmails);
 
-    const currentGoing = guests.filter((item) => item.rsvpStatus === "GOING").length;
-    const currentMaybe = guests.filter((item) => item.rsvpStatus === "MAYBE").length;
-    const currentDeclined = guests.filter((item) => item.rsvpStatus === "DECLINED").length;
-    const currentPending = guests.filter((item) => item.rsvpStatus === "PENDING").length;
-
-    if (
-      currentGoing === liveCounters.goingCount &&
-      currentMaybe === liveCounters.maybeCount &&
-      currentDeclined === liveCounters.declinedCount &&
-      currentPending === liveCounters.pendingCount
-    ) {
-      return guests;
-    }
-
-    const normalizedStatuses: RsvpStatus[] = [
-      ...Array.from({ length: liveCounters.goingCount }, () => "GOING" as const),
-      ...Array.from({ length: liveCounters.maybeCount }, () => "MAYBE" as const),
-      ...Array.from({ length: liveCounters.declinedCount }, () => "DECLINED" as const),
-      ...Array.from({ length: liveCounters.pendingCount }, () => "PENDING" as const),
-    ];
-
-    return guests.map((guest, index) => ({
-      ...guest,
-      rsvpStatus: normalizedStatuses[index] ?? guest.rsvpStatus,
-    }));
-  };
-
-  const handleResendInvitations = async () => {
-    if (!eventId || Number.isNaN(numericEventId)) {
+    if (validEmails.length === 0) {
+      setGuestsMessage(
+        invalidEmails.length > 0
+          ? `Добавьте хотя бы один корректный email. Некорректные: ${invalidEmails.join(", ")}`
+          : "Добавьте хотя бы один email гостя"
+      );
+      setGuestsMessageType("warning");
       return;
     }
 
-    setIsResending(true);
-    setGuestsMessage(null);
+    setIsSubmittingGuests(true);
 
     try {
-      const response = await invitationsApi.resendInvitations(numericEventId);
-      setGuests(response);
-      setGuestsMessage("Приглашения были повторно отправлены");
+      const createdInvitations = await invitationsApi.createInvitations(numericEventId, {
+        guestEmails: validEmails,
+      });
+
+      setGuests((prev) => {
+        const merged = [...prev];
+        createdInvitations.forEach((invitation) => {
+          const index = merged.findIndex((item) => item.id === invitation.id);
+          if (index >= 0) {
+            merged[index] = invitation;
+          } else {
+            merged.push(invitation);
+          }
+        });
+
+        return merged;
+      });
+
+      const messageParts: string[] = [];
+
+      if (createdInvitations.length > 0) {
+        messageParts.push(`Приглашения отправлены: ${createdInvitations.length}`);
+      }
+
+      if (duplicateEmails.length > 0) {
+        messageParts.push(`Дубликаты в форме: ${duplicateEmails.join(", ")}`);
+      }
+
+      if (invalidEmails.length > 0) {
+        messageParts.push(`Некорректные email: ${invalidEmails.join(", ")}`);
+      }
+
+      setGuestsMessage(messageParts.join(". "));
       setGuestsMessageType("success");
+      setGuestEmails("");
     } catch (error: unknown) {
-      setGuestsMessage(getApiErrorMessage(error, "Не удалось повторно отправить приглашения"));
+      setGuestsMessage(getApiErrorMessage(error, "Не удалось отправить приглашения"));
       setGuestsMessageType("error");
     } finally {
-      setIsResending(false);
+      setIsSubmittingGuests(false);
     }
   };
 
   if (isLoading) {
     return (
       <div className="rounded-3xl border border-slate-200 bg-white p-8 text-sm text-slate-600 shadow-sm">
-        Загрузка данных мероприятия...
+        Загрузка мероприятия...
       </div>
     );
   }
 
-  if (error || !eventData) {
+  if (loadError || !eventData) {
     return (
       <div className="rounded-3xl border border-red-200 bg-red-50 p-6 text-sm text-red-700">
-        {error ?? "Мероприятие не найдено"}
+        {loadError ?? "Мероприятие не найдено"}
       </div>
     );
   }
 
-  const counterInvitations = buildCounterInvitations();
-
   return (
-    <div className="space-y-8">
-      {!isConnected ? (
-        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Live-обновления временно недоступны. Пытаемся подключиться...
-        </div>
-      ) : null}
-
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
-          Управление мероприятием
-        </h1>
-        <p className="mt-2 text-sm text-slate-500">
-          Просматривайте детали события, контролируйте ответы гостей и запускайте опросы.
-        </p>
-      </div>
-
+    <div className="space-y-6">
       <section className="space-y-4">
-        <h2 className="text-xl font-bold text-slate-900">Детали</h2>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Управление мероприятием</h1>
 
-        <div className="grid gap-6 xl:grid-cols-[1.2fr_1fr]">
-          <EventDetailsCard event={eventData} />
+        <EventDetailsCard event={eventData} />
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
           <EventMapPreview lat={eventData.lat} lon={eventData.lon} />
-        </div>
-      </section>
-
-      <section className="space-y-4">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <h2 className="text-xl font-bold text-slate-900">Гости</h2>
-
-          <div className="w-full sm:w-64">
-            <Button type="button" isLoading={isResending} onClick={handleResendInvitations}>
-              Повторно отправить приглашения
-            </Button>
-          </div>
         </div>
 
         {guestsMessage ? (
           <div
             className={[
-              "rounded-2xl px-4 py-3 text-sm",
+              "rounded-2xl px-4 py-3 text-sm border",
               guestsMessageType === "success"
-                ? "border border-emerald-200 bg-emerald-50 text-emerald-800"
-                : "border border-red-200 bg-red-50 text-red-700",
+                ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                : guestsMessageType === "warning"
+                  ? "border-amber-200 bg-amber-50 text-amber-800"
+                  : "border-red-200 bg-red-50 text-red-700",
             ].join(" ")}
           >
             {guestsMessage}
           </div>
         ) : null}
 
-        <RsvpCounters invitations={counterInvitations} />
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="space-y-4">
+            <div>
+              <h3 className="text-lg font-semibold text-slate-900">Пригласить ещё гостей</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Добавьте новые email. Уже существующие приглашения не будут продублированы.
+              </p>
+            </div>
+
+            <GuestEmailsTextarea value={guestEmails} onChange={setGuestEmails} />
+
+            <div className="sm:w-64">
+              <Button type="button" isLoading={isSubmittingGuests} onClick={handleAddGuests}>
+                Добавить гостей
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <RsvpCounters
+          goingCount={counters.goingCount}
+          maybeCount={counters.maybeCount}
+          declinedCount={counters.declinedCount}
+          pendingCount={counters.pendingCount}
+        />
+
         <GuestListTable invitations={guests} />
       </section>
 
       <section className="space-y-4">
         <h2 className="text-xl font-bold text-slate-900">Опросы</h2>
 
-        <div className="grid gap-6 xl:grid-cols-[1fr_1fr]">
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            {activePoll ? (
-              <ActivePollBanner
-                poll={activePoll}
-                onClosed={(closedPoll) => {
-                  setActivePoll(null);
-                  setLastPoll(closedPoll);
-                }}
-              />
-            ) : (
-              <PollCreateForm
-                eventId={numericEventId}
-                onCreated={(poll) => {
-                  setActivePoll(poll);
-                  setLastPoll(poll);
-                }}
-              />
-            )}
-          </div>
-
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            {lastPoll ? (
-              <PollResultsChart poll={lastPoll} />
-            ) : (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
-                Опрос пока не создан.
-              </div>
-            )}
-          </div>
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          {activePoll ? (
+            <ActivePollBanner
+              poll={activePoll}
+              onClosed={(closedPoll) => {
+                setActivePoll(null);
+                setLastPoll(closedPoll);
+              }}
+            />
+          ) : (
+            <PollCreateForm
+              eventId={numericEventId}
+              onCreated={(poll) => {
+                setActivePoll(poll);
+                setLastPoll(poll);
+              }}
+            />
+          )}
         </div>
+
+        {lastPoll ? (
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <PollResultsChart poll={lastPoll} />
+          </div>
+        ) : null}
       </section>
     </div>
   );

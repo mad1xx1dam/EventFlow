@@ -1,19 +1,16 @@
-import type { InvitationResponse, RsvpStatus } from "../../types/invitation";
-
 interface RsvpCountersProps {
-  invitations: InvitationResponse[];
+  goingCount: number;
+  maybeCount: number;
+  declinedCount: number;
+  pendingCount: number;
 }
 
-const getStatusCount = (invitations: InvitationResponse[], status: RsvpStatus) => {
-  return invitations.filter((invitation) => invitation.rsvpStatus === status).length;
-};
-
-const RsvpCounters = ({ invitations }: RsvpCountersProps) => {
-  const goingCount = getStatusCount(invitations, "GOING");
-  const maybeCount = getStatusCount(invitations, "MAYBE");
-  const declinedCount = getStatusCount(invitations, "DECLINED");
-  const pendingCount = getStatusCount(invitations, "PENDING");
-
+const RsvpCounters = ({
+  goingCount,
+  maybeCount,
+  declinedCount,
+  pendingCount,
+}: RsvpCountersProps) => {
   const items = [
     {
       label: "Идут",

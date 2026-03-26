@@ -2,10 +2,14 @@ import { useState, type FormEvent } from "react";
 import { authApi } from "../../api/authApi";
 import Input from "../common/Input";
 import Button from "../common/Button";
-import { getApiErrorData, getApiErrorMessage } from "../../utils/apiError";
+import {
+  getApiErrorData,
+  getApiErrorMessage,
+  getApiValidationErrors,
+} from "../../utils/apiError";
 
 interface RegisterFormProps {
-  onSuccess?: (message: string) => void;
+  onSuccess?: (payload: { message: string; email: string }) => void;
 }
 
 interface RegisterFormErrors {
@@ -48,7 +52,6 @@ const RegisterForm = ({ onSuccess }: RegisterFormProps) => {
     }
 
     setErrors(nextErrors);
-
     return Object.keys(nextErrors).length === 0;
   };
 
@@ -63,28 +66,44 @@ const RegisterForm = ({ onSuccess }: RegisterFormProps) => {
     setErrors({});
 
     try {
+      const normalizedEmail = email.trim();
+
       const response = await authApi.register({
         name: name.trim(),
-        email: email.trim(),
+        email: normalizedEmail,
         password,
         confirmPassword,
       });
 
-      onSuccess?.(response.message);
+      onSuccess?.({
+        message: response.message,
+        email: normalizedEmail,
+      });
     } catch (error: unknown) {
       const data = getApiErrorData(error);
+      const validationErrors = getApiValidationErrors(error);
 
-      if (data?.errors) {
+      if (validationErrors) {
         setErrors({
-          name: typeof data.errors.name === "string" ? data.errors.name : undefined,
-          email: typeof data.errors.email === "string" ? data.errors.email : undefined,
-          password: typeof data.errors.password === "string" ? data.errors.password : undefined,
+          name:
+            typeof validationErrors.name === "string"
+              ? validationErrors.name
+              : undefined,
+          email:
+            typeof validationErrors.email === "string"
+              ? validationErrors.email
+              : undefined,
+          password:
+            typeof validationErrors.password === "string"
+              ? validationErrors.password
+              : undefined,
           confirmPassword:
-            typeof data.errors.confirmPassword === "string"
-              ? data.errors.confirmPassword
+            typeof validationErrors.confirmPassword === "string"
+              ? validationErrors.confirmPassword
               : undefined,
           common:
-            data.message && data.message !== "Ошибка валидации входных данных"
+            data?.message &&
+            data.message !== "Ошибка валидации входных данных"
               ? data.message
               : undefined,
         });
@@ -138,6 +157,11 @@ const RegisterForm = ({ onSuccess }: RegisterFormProps) => {
         onChange={(event) => setPassword(event.target.value)}
         error={errors.password}
       />
+
+      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+        Пароль должен содержать от 8 до 100 символов, включая хотя бы одну цифру,
+        одну заглавную и одну строчную букву.
+      </div>
 
       <Input
         label="Подтверждение пароля"
