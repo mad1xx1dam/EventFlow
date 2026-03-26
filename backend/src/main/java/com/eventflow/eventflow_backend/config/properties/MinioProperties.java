@@ -16,8 +16,4 @@ public class MinioProperties {
     private String accessKey;
     private String secretKey;
     private String bucket;
-
-    public String getPublicBaseUrl() {
-        return publicBaseUrl + "/" + bucket;
-    }
 }
