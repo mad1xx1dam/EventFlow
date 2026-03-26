@@ -7,6 +7,7 @@ import GuestLiveCounter from "../../components/guest/GuestLiveCounter";
 import GuestPollModal from "../../components/guest/GuestPollModal";
 import GuestRsvpPanel from "../../components/guest/GuestRsvpPanel";
 import PollHistoryList from "../../components/polls/PollHistoryList";
+import PollResultsChart from "../../components/polls/PollResultsChart";
 import useStomp from "../../hooks/useStomp";
 import type {
   GuestInvitationDetailsResponse,
@@ -28,6 +29,9 @@ const upsertPoll = (polls: PollResponse[], incomingPoll: PollResponse) => {
     (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
   );
 };
+
+const getDismissedPollStorageKey = (eventId: number) =>
+  `eventflow:event:${eventId}:viewer-dismissed-active-poll`;
 
 const GuestInvitationPage = () => {
   const { eventId, guestToken } = useParams<{
@@ -67,6 +71,11 @@ const GuestInvitationPage = () => {
     [polls]
   );
 
+  const isPastEvent = useMemo(() => {
+    if (!invitation?.startsAt) return false;
+    return new Date(invitation.startsAt).getTime() < Date.now();
+  }, [invitation?.startsAt]);
+
   useEffect(() => {
     const loadInvitation = async () => {
       if (!guestToken || !eventId || Number.isNaN(numericEventId)) {
@@ -92,10 +101,20 @@ const GuestInvitationPage = () => {
           declinedCount: Number(invitationResponse.declinedCount),
           pendingCount: Number(invitationResponse.pendingCount),
         });
+
         setPolls(pollsResponse);
+
+        const dismissedPollIdRaw = sessionStorage.getItem(
+          getDismissedPollStorageKey(numericEventId)
+        );
+        const dismissedPollId = dismissedPollIdRaw ? Number(dismissedPollIdRaw) : null;
+
         setIsPollOpen(
           pollsResponse.some(
-            (poll) => poll.status === "ACTIVE" && !poll.votedByCurrentGuest
+            (poll) =>
+              poll.status === "ACTIVE" &&
+              !poll.votedByCurrentGuest &&
+              poll.id !== dismissedPollId
           )
         );
       } catch (loadError: unknown) {
@@ -132,16 +151,26 @@ const GuestInvitationPage = () => {
         setPolls((prev) => upsertPoll(prev, payload.poll));
 
         if (payload.type === "POLL_CLOSED") {
+          sessionStorage.removeItem(getDismissedPollStorageKey(numericEventId));
           setIsPollOpen(false);
           return;
         }
+
+        const dismissedPollIdRaw = sessionStorage.getItem(
+          getDismissedPollStorageKey(numericEventId)
+        );
+        const dismissedPollId = dismissedPollIdRaw ? Number(dismissedPollIdRaw) : null;
 
         setIsPollOpen((prev) => {
           if (prev) {
             return true;
           }
 
-          return payload.poll.status === "ACTIVE" && !payload.poll.votedByCurrentGuest;
+          return (
+            payload.poll.status === "ACTIVE" &&
+            !payload.poll.votedByCurrentGuest &&
+            payload.poll.id !== dismissedPollId
+          );
         });
       },
     });
@@ -181,6 +210,22 @@ const GuestInvitationPage = () => {
     };
   }, [activePoll?.id, isConnected, subscribe]);
 
+  const handleDismissPoll = () => {
+    if (votableActivePoll) {
+      sessionStorage.setItem(
+        getDismissedPollStorageKey(numericEventId),
+        String(votableActivePoll.id)
+      );
+    }
+    setIsPollOpen(false);
+  };
+
+  const handleOpenPoll = () => {
+    if (!votableActivePoll) return;
+    sessionStorage.removeItem(getDismissedPollStorageKey(numericEventId));
+    setIsPollOpen(true);
+  };
+
   if (isLoading) {
     return (
       <div className="mx-auto max-w-5xl px-4 py-10">
@@ -206,41 +251,50 @@ const GuestInvitationPage = () => {
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-8">
         <GuestEventCard invitation={invitation} />
 
-        <GuestRsvpPanel
-          eventId={numericEventId}
-          guestToken={guestToken}
-          currentStatus={invitation.rsvpStatus}
-          onUpdated={(updatedInvitation) => {
-            setInvitation(updatedInvitation);
-            setCounters({
-              eventId: updatedInvitation.eventId,
-              goingCount: Number(updatedInvitation.goingCount),
-              maybeCount: Number(updatedInvitation.maybeCount),
-              declinedCount: Number(updatedInvitation.declinedCount),
-              pendingCount: Number(updatedInvitation.pendingCount),
-            });
-          }}
-        />
+        {isPastEvent ? (
+          <div className="rounded-2xl border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-500 shadow-sm">
+            Мероприятие уже завершилось. Изменить статус присутствия больше нельзя.
+          </div>
+        ) : (
+          <GuestRsvpPanel
+            eventId={numericEventId}
+            guestToken={guestToken}
+            currentStatus={invitation.rsvpStatus}
+            onUpdated={(updatedInvitation) => {
+              setInvitation(updatedInvitation);
+              setCounters({
+                eventId: updatedInvitation.eventId,
+                goingCount: Number(updatedInvitation.goingCount),
+                maybeCount: Number(updatedInvitation.maybeCount),
+                declinedCount: Number(updatedInvitation.declinedCount),
+                pendingCount: Number(updatedInvitation.pendingCount),
+              });
+            }}
+          />
+        )}
 
         <GuestLiveCounter counters={counters} />
 
-        {activePoll && activePoll.votedByCurrentGuest ? (
-          <section className="space-y-4">
-            <h2 className="text-xl font-bold text-slate-900">Текущий опрос</h2>
+        <section className="space-y-4">
+          <h2 className="text-xl font-bold text-slate-900">Опросы</h2>
 
-            <div className="rounded-3xl border border-blue-200 bg-blue-50 p-6 shadow-sm">
+          {activePoll ? (
+            <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
               <div className="mb-4 flex flex-wrap items-center gap-2">
-                <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">
-                  Активный
-                </span>
-                <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
-                  Вы уже проголосовали
-                </span>
+                {activePoll.votedByCurrentGuest ? (
+                  <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-semibold text-emerald-800">
+                    Активный (Вы проголосовали)
+                  </span>
+                ) : (
+                  <span className="inline-flex rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-800">
+                    Активный (Ожидает ваш голос)
+                  </span>
+                )}
               </div>
 
               <h3 className="text-lg font-bold text-slate-900">{activePoll.question}</h3>
 
-              {activePoll.selectedOptionId ? (
+              {activePoll.votedByCurrentGuest && activePoll.selectedOptionId ? (
                 <p className="mt-2 text-sm text-slate-600">
                   Ваш выбор:{" "}
                   <span className="font-semibold text-slate-900">
@@ -252,14 +306,35 @@ const GuestInvitationPage = () => {
               ) : null}
 
               <div className="mt-4">
-                <PollHistoryList polls={[activePoll]} emptyText="" />
+                <PollResultsChart poll={activePoll} />
               </div>
-            </div>
-          </section>
-        ) : null}
 
-        <section className="space-y-4">
-          <h2 className="text-xl font-bold text-slate-900">Прошлые опросы</h2>
+              {!activePoll.votedByCurrentGuest ? (
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={handleOpenPoll}
+                    className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
+                  >
+                    Открыть опрос
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleDismissPoll}
+                    className="rounded-2xl border border-slate-200 px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-50"
+                  >
+                    Скрыть
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-6 text-sm text-slate-500">
+              Сейчас активных опросов нет.
+            </div>
+          )}
+
           <PollHistoryList
             polls={closedPolls}
             emptyText="Прошлых опросов пока нет."
@@ -274,6 +349,7 @@ const GuestInvitationPage = () => {
           isOpen={isPollOpen}
           onClose={() => setIsPollOpen(false)}
           onVoted={(updatedPoll) => {
+            sessionStorage.removeItem(getDismissedPollStorageKey(numericEventId));
             setPolls((prev) => upsertPoll(prev, updatedPoll));
             setIsPollOpen(false);
           }}

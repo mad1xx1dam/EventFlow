@@ -1,11 +1,15 @@
-export type CalendarColorType = string;
-
 export interface CalendarEventItemResponse {
   eventId: number;
   title: string;
   startsAt: string;
   address: string;
-  colorType: CalendarColorType;
+  colorType: string;
+  guestToken?: string;
+}
+
+export interface DashboardSummaryResponse {
+  createdEventsCount: number;
+  acceptedInvitationsCount: number;
 }
 
 export interface CalendarResponse {
@@ -13,9 +17,4 @@ export interface CalendarResponse {
   month: number;
   creatorEvents: CalendarEventItemResponse[];
   guestEvents: CalendarEventItemResponse[];
-}
-
-export interface DashboardSummaryResponse {
-  createdEventsCount: number;
-  acceptedInvitationsCount: number;
 }

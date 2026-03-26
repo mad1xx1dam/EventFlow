@@ -1,6 +1,7 @@
 package com.eventflow.eventflow_backend.dto.response;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -15,4 +16,5 @@ public class CalendarEventItemResponse {
     private OffsetDateTime startsAt;
     private String address;
     private String colorType;
+    private UUID guestToken;
 }

@@ -17,6 +17,7 @@ public interface DashboardMapper {
     @Mapping(target = "startsAt", source = "event.startsAt")
     @Mapping(target = "address", source = "event.address")
     @Mapping(target = "colorType", constant = "CREATOR")
+    @Mapping(target = "guestToken", ignore = true)
     CalendarEventItemResponse toCreatorCalendarItem(Event event);
 
     @Mapping(target = "eventId", source = "eventGuest.event.id")
@@ -24,5 +25,6 @@ public interface DashboardMapper {
     @Mapping(target = "startsAt", source = "eventGuest.event.startsAt")
     @Mapping(target = "address", source = "eventGuest.event.address")
     @Mapping(target = "colorType", constant = "GUEST")
+    @Mapping(target = "guestToken", source = "eventGuest.guestToken")
     CalendarEventItemResponse toGuestCalendarItem(EventGuest eventGuest);
 }

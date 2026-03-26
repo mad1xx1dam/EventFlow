@@ -51,6 +51,7 @@ const getCalendarDays = (year: number, month: number): CalendarDay[] => {
   const daysInMonth = lastDayOfMonth.getDate();
 
   const prevMonthLastDay = new Date(year, month - 1, 0).getDate();
+
   const days: CalendarDay[] = [];
 
   for (let i = startWeekday - 1; i >= 0; i -= 1) {
@@ -81,6 +82,7 @@ const getCalendarDays = (year: number, month: number): CalendarDay[] => {
 
 const EventCalendar = ({ year, month, onPrevMonth, onNextMonth }: EventCalendarProps) => {
   const navigate = useNavigate();
+
   const [creatorEvents, setCreatorEvents] = useState<CalendarEventItemResponse[]>([]);
   const [guestEvents, setGuestEvents] = useState<CalendarEventItemResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -243,18 +245,18 @@ const EventCalendar = ({ year, month, onPrevMonth, onNextMonth }: EventCalendarP
                         <div
                           key={`${event.source}-${event.eventId}`}
                           onClick={(clickEvent) => {
-                            if (!isCreatorEvent) {
-                              return;
-                            }
-
                             clickEvent.stopPropagation();
-                            navigate(`/events/${event.eventId}/manage`);
+                            if (isCreatorEvent) {
+                              navigate(`/events/${event.eventId}/manage`);
+                            } else if (event.guestToken) {
+                              navigate(`/events/${event.eventId}/invite/${event.guestToken}`);
+                            }
                           }}
                           className={[
                             "rounded-xl border px-2 py-2 text-xs",
                             isCreatorEvent
                               ? "border-emerald-200 bg-emerald-50 text-emerald-800 cursor-pointer hover:bg-emerald-100"
-                              : "border-blue-200 bg-blue-50 text-blue-800 cursor-default",
+                              : "border-blue-200 bg-blue-50 text-blue-800 cursor-pointer hover:bg-blue-100",
                           ].join(" ")}
                         >
                           <div className="font-semibold">{formatEventTime(event.startsAt)}</div>
