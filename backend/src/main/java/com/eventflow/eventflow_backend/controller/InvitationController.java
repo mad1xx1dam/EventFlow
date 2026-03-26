@@ -6,13 +6,12 @@ import com.eventflow.eventflow_backend.dto.response.GuestInvitationDetailsRespon
 import com.eventflow.eventflow_backend.dto.response.InvitationResponse;
 import com.eventflow.eventflow_backend.service.InvitationService;
 import jakarta.validation.Valid;
+import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
-import java.util.List;
-import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/events/{eventId}")
@@ -51,5 +50,11 @@ public class InvitationController {
             @Valid @RequestBody UpdateRsvpRequest request
     ) {
         return ResponseEntity.ok(invitationService.updateRsvp(eventId, guestToken, request));
+    }
+
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @GetMapping("/guests")
+    public ResponseEntity<List<InvitationResponse>> getEventGuests(@PathVariable Long eventId) {
+        return ResponseEntity.ok(invitationService.getEventGuests(eventId));
     }
 }

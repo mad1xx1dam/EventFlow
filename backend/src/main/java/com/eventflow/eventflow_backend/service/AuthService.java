@@ -1,9 +1,5 @@
 package com.eventflow.eventflow_backend.service;
 
-import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.UUID;
-
 import com.eventflow.eventflow_backend.dto.request.LoginRequest;
 import com.eventflow.eventflow_backend.dto.request.RegisterRequest;
 import com.eventflow.eventflow_backend.dto.request.ResendVerificationEmailRequest;
@@ -32,6 +28,10 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -54,8 +54,17 @@ public class AuthService {
             throw new IllegalArgumentException("Пароль и подтверждение пароля не совпадают");
         }
 
-        if (userRepository.existsByEmail(email)) {
-            throw new IllegalArgumentException("Пользователь с таким email уже существует");
+        User existingUser = userRepository.findByEmail(email).orElse(null);
+
+        if (existingUser != null) {
+            if (Boolean.TRUE.equals(existingUser.getEmailVerified())) {
+                throw new IllegalArgumentException("Пользователь с таким email уже существует");
+            }
+
+            resendVerificationForExistingUnverifiedUser(existingUser);
+            return authMapper.toRegisterResponse(
+                    "Аккаунт с таким email уже зарегистрирован, но не подтверждён. Мы отправили письмо для подтверждения повторно."
+            );
         }
 
         Role userRole = roleRepository.findByCode(RoleCode.USER)
@@ -77,10 +86,11 @@ public class AuthService {
         );
 
         emailVerificationTokenRepository.save(verificationToken);
-
         mailService.sendVerificationEmail(savedUser.getEmail(), verificationToken.getToken());
 
-        return authMapper.toRegisterResponse("Регистрация прошла успешно. Пожалуйста, подтвердите email.");
+        return authMapper.toRegisterResponse(
+                "Регистрация прошла успешно. Проверьте почту для подтверждения email."
+        );
     }
 
     @Transactional
@@ -123,7 +133,7 @@ public class AuthService {
                     )
             );
         } catch (DisabledException ex) {
-            throw new DisabledException("Аккаунт не активирован");
+            throw new DisabledException("Аккаунт не активирован или email ещё не подтверждён");
         } catch (BadCredentialsException ex) {
             throw new BadCredentialsException("Неверный email или пароль");
         }
@@ -144,10 +154,8 @@ public class AuthService {
     public RegisterResponse resendVerificationEmail(ResendVerificationEmailRequest request) {
         String email = request.getEmail().trim().toLowerCase();
 
-        User user = userRepository.findByEmail(email)
-                .orElse(null);
+        User user = userRepository.findByEmail(email).orElse(null);
 
-        // Не раскрываем, существует пользователь или нет
         if (user == null) {
             return authMapper.toRegisterResponse(
                     "Если аккаунт с таким email существует, письмо с подтверждением будет отправлено повторно."
@@ -158,30 +166,38 @@ public class AuthService {
             return authMapper.toRegisterResponse("Email уже подтверждён.");
         }
 
-        List<EmailVerificationToken> activeTokens =
-                emailVerificationTokenRepository.findAllByUserIdAndUsedAtIsNull(user.getId());
-
-        OffsetDateTime now = OffsetDateTime.now();
-
-        for (EmailVerificationToken activeToken : activeTokens) {
-            activeToken.setUsedAt(now);
-        }
-
-        emailVerificationTokenRepository.saveAll(activeTokens);
-
-        EmailVerificationToken verificationToken = authMapper.toEmailVerificationToken(
-                user,
-                UUID.randomUUID(),
-                now,
-                now.plusHours(24)
-        );
-
-        emailVerificationTokenRepository.save(verificationToken);
-
-        mailService.sendVerificationEmail(user.getEmail(), verificationToken.getToken());
+        resendVerificationForExistingUnverifiedUser(user);
 
         return authMapper.toRegisterResponse(
                 "Если аккаунт с таким email существует, письмо с подтверждением будет отправлено повторно."
         );
+    }
+
+    private void resendVerificationForExistingUnverifiedUser(User user) {
+        OffsetDateTime now = OffsetDateTime.now();
+        OffsetDateTime expiresAt = now.plusHours(24);
+
+        List<EmailVerificationToken> activeTokens =
+                emailVerificationTokenRepository.findAllByUserIdAndUsedAtIsNull(user.getId());
+
+        for (EmailVerificationToken token : activeTokens) {
+            if (token.getExpiresAt().isAfter(now)) {
+                token.setExpiresAt(now);
+            }
+        }
+
+        if (!activeTokens.isEmpty()) {
+            emailVerificationTokenRepository.saveAll(activeTokens);
+        }
+
+        EmailVerificationToken newToken = new EmailVerificationToken();
+        newToken.setUser(user);
+        newToken.setToken(UUID.randomUUID());
+        newToken.setCreatedAt(now);
+        newToken.setExpiresAt(expiresAt);
+        newToken.setUsedAt(null);
+
+        emailVerificationTokenRepository.save(newToken);
+        mailService.sendVerificationEmail(user.getEmail(), newToken.getToken());
     }
 }

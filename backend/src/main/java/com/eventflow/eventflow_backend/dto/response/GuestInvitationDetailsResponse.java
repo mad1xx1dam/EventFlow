@@ -22,4 +22,9 @@ public class GuestInvitationDetailsResponse {
 
     private String guestEmail;
     private RsvpStatus rsvpStatus;
+
+    private Long goingCount;
+    private Long maybeCount;
+    private Long declinedCount;
+    private Long pendingCount;
 }

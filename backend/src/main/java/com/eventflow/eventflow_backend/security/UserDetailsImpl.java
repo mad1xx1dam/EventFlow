@@ -1,14 +1,14 @@
 package com.eventflow.eventflow_backend.security;
 
-import java.util.Collection;
-import java.util.List;
-
 import com.eventflow.eventflow_backend.entity.User;
 import com.eventflow.eventflow_backend.entity.enums.RoleCode;
 import lombok.Getter;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
+
+import java.util.Collection;
+import java.util.List;
 
 @Getter
 public class UserDetailsImpl implements UserDetails {
@@ -17,6 +17,7 @@ public class UserDetailsImpl implements UserDetails {
     private final String email;
     private final String password;
     private final Boolean enabled;
+    private final Boolean emailVerified;
     private final RoleCode roleCode;
     private final Collection<? extends GrantedAuthority> authorities;
 
@@ -25,6 +26,7 @@ public class UserDetailsImpl implements UserDetails {
             String email,
             String password,
             Boolean enabled,
+            Boolean emailVerified,
             RoleCode roleCode,
             Collection<? extends GrantedAuthority> authorities
     ) {
@@ -32,6 +34,7 @@ public class UserDetailsImpl implements UserDetails {
         this.email = email;
         this.password = password;
         this.enabled = enabled;
+        this.emailVerified = emailVerified;
         this.roleCode = roleCode;
         this.authorities = authorities;
     }
@@ -44,6 +47,7 @@ public class UserDetailsImpl implements UserDetails {
                 user.getEmail(),
                 user.getPasswordHash(),
                 user.getEnabled(),
+                user.getEmailVerified(),
                 roleCode,
                 List.of(new SimpleGrantedAuthority("ROLE_" + roleCode.name()))
         );
@@ -71,6 +75,6 @@ public class UserDetailsImpl implements UserDetails {
 
     @Override
     public boolean isEnabled() {
-        return Boolean.TRUE.equals(enabled);
+        return Boolean.TRUE.equals(enabled) && Boolean.TRUE.equals(emailVerified);
     }
 }

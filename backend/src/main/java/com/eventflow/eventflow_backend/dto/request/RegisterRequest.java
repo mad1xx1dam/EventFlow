@@ -18,7 +18,10 @@ public class RegisterRequest {
     private String name;
 
     @NotBlank(message = "Email обязателен для заполнения")
-    @Email(message = "Некорректный формат email")
+    @Email(
+            regexp = "^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,6}$",
+            message = "Некорректный формат email"
+    )
     @Size(max = 255, message = "Email не должен превышать 255 символов")
     private String email;
 

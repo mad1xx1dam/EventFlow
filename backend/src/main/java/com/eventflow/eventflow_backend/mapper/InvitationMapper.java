@@ -24,5 +24,9 @@ public interface InvitationMapper {
     @Mapping(target = "posterUrl", source = "posterUrl")
     @Mapping(target = "guestEmail", source = "eventGuest.guestEmail")
     @Mapping(target = "rsvpStatus", source = "eventGuest.rsvpStatus")
+    @Mapping(target = "goingCount", ignore = true)
+    @Mapping(target = "maybeCount", ignore = true)
+    @Mapping(target = "declinedCount", ignore = true)
+    @Mapping(target = "pendingCount", ignore = true)
     GuestInvitationDetailsResponse toGuestInvitationDetailsResponse(EventGuest eventGuest, String posterUrl);
 }

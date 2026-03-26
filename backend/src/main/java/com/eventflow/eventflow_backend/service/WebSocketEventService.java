@@ -1,8 +1,8 @@
 package com.eventflow.eventflow_backend.service;
 
+import com.eventflow.eventflow_backend.dto.response.EventRsvpSnapshotResponse;
 import com.eventflow.eventflow_backend.dto.response.PollLiveEventResponse;
 import com.eventflow.eventflow_backend.dto.response.PollResponse;
-import com.eventflow.eventflow_backend.dto.response.RsvpCountersResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Service;
@@ -13,9 +13,9 @@ public class WebSocketEventService {
 
     private final SimpMessagingTemplate messagingTemplate;
 
-    public void sendRsvpCounters(Long eventId, RsvpCountersResponse response) {
+    public void sendRsvpSnapshot(Long eventId, EventRsvpSnapshotResponse response) {
         messagingTemplate.convertAndSend(
-                "/topic/events/" + eventId + "/rsvp-counters",
+                "/topic/events/" + eventId + "/rsvp",
                 response
         );
     }

@@ -3,6 +3,7 @@ package com.eventflow.eventflow_backend.service;
 import com.eventflow.eventflow_backend.config.properties.MailProperties;
 import com.eventflow.eventflow_backend.dto.request.CreateInvitationsRequest;
 import com.eventflow.eventflow_backend.dto.request.UpdateRsvpRequest;
+import com.eventflow.eventflow_backend.dto.response.EventRsvpSnapshotResponse;
 import com.eventflow.eventflow_backend.dto.response.GuestInvitationDetailsResponse;
 import com.eventflow.eventflow_backend.dto.response.InvitationResponse;
 import com.eventflow.eventflow_backend.dto.response.RsvpCountersResponse;
@@ -49,11 +50,9 @@ public class InvitationService {
         Set<String> normalizedEmails = normalizeEmails(request.getGuestEmails());
         OffsetDateTime now = OffsetDateTime.now();
 
-        List<InvitationResponse> responses = normalizedEmails.stream()
+        return normalizedEmails.stream()
                 .map(email -> createOrReuseInvitation(event, email, now))
                 .toList();
-
-        return responses;
     }
 
     @Transactional
@@ -61,10 +60,12 @@ public class InvitationService {
         Event event = getEventOrThrow(eventId);
         validateEventManagementAccess(event);
 
-        List<EventGuest> guests = eventGuestRepository.findAllByEventIdOrderByInvitedAtAsc(eventId);
+        List<EventGuest> guests = eventGuestRepository.findAllByEventIdOrderByInvitedAtAsc(eventId).stream()
+                .filter(eventGuest -> eventGuest.getRsvpStatus() == RsvpStatus.PENDING)
+                .toList();
 
         if (guests.isEmpty()) {
-            throw new IllegalArgumentException("Для этого мероприятия нет приглашённых гостей");
+            throw new IllegalArgumentException("Для этого мероприятия нет гостей, ожидающих ответа");
         }
 
         guests.forEach(eventGuest -> mailService.sendInvitationEmail(
@@ -74,10 +75,7 @@ public class InvitationService {
         ));
 
         return guests.stream()
-                .map(eventGuest -> invitationMapper.toInvitationResponse(
-                        eventGuest,
-                        buildInvitationUrl(event.getId(), eventGuest.getGuestToken())
-                ))
+                .map(this::toInvitationResponse)
                 .toList();
     }
 
@@ -86,7 +84,16 @@ public class InvitationService {
         EventGuest eventGuest = getActiveInvitationOrThrow(eventId, guestToken);
         String posterUrl = minioService.buildPublicUrl(eventGuest.getEvent().getPosterPath());
 
-        return invitationMapper.toGuestInvitationDetailsResponse(eventGuest, posterUrl);
+        GuestInvitationDetailsResponse response =
+                invitationMapper.toGuestInvitationDetailsResponse(eventGuest, posterUrl);
+
+        RsvpCountersResponse counters = rsvpService.getCounters(eventId);
+        response.setGoingCount(counters.getGoingCount());
+        response.setMaybeCount(counters.getMaybeCount());
+        response.setDeclinedCount(counters.getDeclinedCount());
+        response.setPendingCount(counters.getPendingCount());
+
+        return response;
     }
 
     @Transactional
@@ -102,11 +109,48 @@ public class InvitationService {
 
         EventGuest savedEventGuest = eventGuestRepository.save(eventGuest);
 
-        RsvpCountersResponse counters = rsvpService.getCounters(savedEventGuest.getEvent().getId());
-        webSocketEventService.sendRsvpCounters(savedEventGuest.getEvent().getId(), counters);
+        EventRsvpSnapshotResponse snapshot = buildEventRsvpSnapshot(savedEventGuest.getEvent().getId());
+        webSocketEventService.sendRsvpSnapshot(savedEventGuest.getEvent().getId(), snapshot);
 
         String posterUrl = minioService.buildPublicUrl(savedEventGuest.getEvent().getPosterPath());
-        return invitationMapper.toGuestInvitationDetailsResponse(savedEventGuest, posterUrl);
+        GuestInvitationDetailsResponse response =
+                invitationMapper.toGuestInvitationDetailsResponse(savedEventGuest, posterUrl);
+
+        response.setGoingCount(snapshot.getGoingCount());
+        response.setMaybeCount(snapshot.getMaybeCount());
+        response.setDeclinedCount(snapshot.getDeclinedCount());
+        response.setPendingCount(snapshot.getPendingCount());
+
+        return response;
+    }
+
+    @Transactional(readOnly = true)
+    public List<InvitationResponse> getEventGuests(Long eventId) {
+        Event event = getEventOrThrow(eventId);
+        validateEventManagementAccess(event);
+
+        return eventGuestRepository.findAllByEventIdOrderByInvitedAtAsc(eventId).stream()
+                .map(this::toInvitationResponse)
+                .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public EventRsvpSnapshotResponse buildEventRsvpSnapshot(Long eventId) {
+        List<InvitationResponse> guests = eventGuestRepository.findAllByEventIdOrderByInvitedAtAsc(eventId).stream()
+                .map(this::toInvitationResponse)
+                .toList();
+
+        RsvpCountersResponse counters = rsvpService.getCounters(eventId);
+
+        EventRsvpSnapshotResponse response = new EventRsvpSnapshotResponse();
+        response.setEventId(eventId);
+        response.setGoingCount(counters.getGoingCount());
+        response.setMaybeCount(counters.getMaybeCount());
+        response.setDeclinedCount(counters.getDeclinedCount());
+        response.setPendingCount(counters.getPendingCount());
+        response.setGuests(guests);
+
+        return response;
     }
 
     private InvitationResponse createOrReuseInvitation(Event event, String email, OffsetDateTime now) {
@@ -134,8 +178,17 @@ public class InvitationService {
         return eventGuest;
     }
 
-    private User findRegisteredUserByEmail(String email) {
-        return userRepository.findByEmail(email).orElse(null);
+    private InvitationResponse toInvitationResponse(EventGuest eventGuest) {
+        return invitationMapper.toInvitationResponse(
+                eventGuest,
+                buildInvitationUrl(eventGuest.getEvent().getId(), eventGuest.getGuestToken())
+        );
+    }
+
+    private EventGuest getActiveInvitationOrThrow(Long eventId, UUID guestToken) {
+        return eventGuestRepository.findByEventIdAndGuestToken(eventId, guestToken)
+                .filter(eventGuest -> Boolean.TRUE.equals(eventGuest.getTokenActive()))
+                .orElseThrow(() -> new ResourceNotFoundException("Приглашение не найдено или больше не активно"));
     }
 
     private Event getEventOrThrow(Long eventId) {
@@ -143,28 +196,16 @@ public class InvitationService {
                 .orElseThrow(() -> new ResourceNotFoundException("Мероприятие не найдено"));
     }
 
-    private EventGuest getActiveInvitationOrThrow(Long eventId, UUID guestToken) {
-        EventGuest eventGuest = eventGuestRepository.findByGuestToken(guestToken)
-                .orElseThrow(() -> new ResourceNotFoundException("Приглашение не найдено"));
-
-        if (!eventGuest.getEvent().getId().equals(eventId)) {
-            throw new IllegalArgumentException("Токен приглашения не принадлежит этому мероприятию");
-        }
-
-        if (!Boolean.TRUE.equals(eventGuest.getTokenActive())) {
-            throw new IllegalArgumentException("Токен приглашения недействителен");
-        }
-
-        return eventGuest;
-    }
-
     private void validateEventManagementAccess(Event event) {
-        Long currentUserId = currentUserService.getCurrentUserIdOrThrow();
-        boolean isAdmin = currentUserService.isAdmin();
-        boolean isCreator = event.getCreator().getId().equals(currentUserId);
+        User currentUser = currentUserService.getCurrentUserOrThrow();
+        boolean isAdmin = "ADMIN".equals(currentUser.getRole().getName());
 
-        if (!isAdmin && !isCreator) {
-            throw new AccessDeniedException("У вас нет прав на управление приглашениями этого мероприятия");
+        if (isAdmin) {
+            return;
+        }
+
+        if (!event.getCreator().getId().equals(currentUser.getId())) {
+            throw new AccessDeniedException("У вас нет прав для управления этим мероприятием");
         }
     }
 
@@ -172,21 +213,22 @@ public class InvitationService {
         Set<String> normalizedEmails = new LinkedHashSet<>();
 
         for (String email : emails) {
-            if (email == null || email.isBlank()) {
-                continue;
+            if (email != null && !email.isBlank()) {
+                normalizedEmails.add(email.trim().toLowerCase());
             }
-
-            normalizedEmails.add(email.trim().toLowerCase());
-        }
-
-        if (normalizedEmails.isEmpty()) {
-            throw new IllegalArgumentException("Список email не должен быть пустым");
         }
 
         return normalizedEmails;
     }
 
+    private User findRegisteredUserByEmail(String email) {
+        return userRepository.findByEmail(email).orElse(null);
+    }
+
     private String buildInvitationUrl(Long eventId, UUID guestToken) {
-        return mailProperties.getInvitationBaseUrl() + "/" + eventId + "/invite/" + guestToken;
+        return mailProperties.getInvitationBaseUrl()
+                + eventId
+                + "/invite/"
+                + guestToken;
     }
 }
