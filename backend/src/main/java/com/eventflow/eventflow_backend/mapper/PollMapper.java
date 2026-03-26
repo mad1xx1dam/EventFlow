@@ -6,11 +6,10 @@ import com.eventflow.eventflow_backend.entity.Event;
 import com.eventflow.eventflow_backend.entity.Poll;
 import com.eventflow.eventflow_backend.entity.PollOption;
 import com.eventflow.eventflow_backend.entity.User;
-import org.mapstruct.Mapper;
-import org.mapstruct.Mapping;
-
 import java.time.OffsetDateTime;
 import java.util.List;
+import org.mapstruct.Mapper;
+import org.mapstruct.Mapping;
 
 @Mapper(config = MapStructConfig.class)
 public interface PollMapper {
@@ -36,7 +35,12 @@ public interface PollMapper {
     @Mapping(target = "optionText", expression = "java(optionText.trim())")
     @Mapping(target = "position", source = "position")
     @Mapping(target = "createdAt", source = "now")
-    PollOption toPollOption(Poll poll, String optionText, Integer position, OffsetDateTime now);
+    PollOption toPollOption(
+            Poll poll,
+            String optionText,
+            Integer position,
+            OffsetDateTime now
+    );
 
     @Mapping(target = "votesCount", source = "votesCount")
     PollOptionResponse toPollOptionResponse(PollOption pollOption, Long votesCount);
@@ -45,5 +49,7 @@ public interface PollMapper {
     @Mapping(target = "createdByUserId", source = "poll.createdByUser.id")
     @Mapping(target = "status", expression = "java(poll.getStatus().name())")
     @Mapping(target = "options", source = "options")
+    @Mapping(target = "votedByCurrentGuest", ignore = true)
+    @Mapping(target = "selectedOptionId", ignore = true)
     PollResponse toPollResponse(Poll poll, List<PollOptionResponse> options);
 }

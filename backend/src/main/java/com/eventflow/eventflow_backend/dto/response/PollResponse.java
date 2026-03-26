@@ -19,4 +19,7 @@ public class PollResponse {
     private OffsetDateTime startedAt;
     private OffsetDateTime closedAt;
     private List<PollOptionResponse> options;
+
+    private boolean votedByCurrentGuest;
+    private Long selectedOptionId;
 }

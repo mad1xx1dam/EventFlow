@@ -4,6 +4,7 @@ import com.eventflow.eventflow_backend.dto.request.CreatePollRequest;
 import com.eventflow.eventflow_backend.dto.response.PollResponse;
 import com.eventflow.eventflow_backend.service.PollService;
 import jakarta.validation.Valid;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -29,5 +30,11 @@ public class EventPollController {
     @GetMapping("/active")
     public ResponseEntity<PollResponse> getActivePoll(@PathVariable Long eventId) {
         return ResponseEntity.ok(pollService.getActivePollByEventId(eventId));
+    }
+
+    @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
+    @GetMapping
+    public ResponseEntity<List<PollResponse>> getEventPolls(@PathVariable Long eventId) {
+        return ResponseEntity.ok(pollService.getEventPolls(eventId));
     }
 }

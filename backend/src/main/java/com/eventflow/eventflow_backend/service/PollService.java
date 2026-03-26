@@ -27,7 +27,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
-
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
@@ -72,7 +71,12 @@ public class PollService {
         List<Long> optionIds = savedOptions.stream().map(PollOption::getId).toList();
         pollRedisService.initializeActivePoll(savedPoll.getId(), optionIds);
 
-        PollResponse response = buildPollResponse(savedPoll, savedOptions, pollRedisService.getCounts(savedPoll.getId()));
+        PollResponse response = buildPollResponse(
+                savedPoll,
+                savedOptions,
+                pollRedisService.getCounts(savedPoll.getId())
+        );
+
         webSocketEventService.sendPollStarted(eventId, response);
         return response;
     }
@@ -88,6 +92,25 @@ public class PollService {
                 : buildCountsFromDatabase(poll.getId());
 
         return buildPollResponse(poll, options, counts);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PollResponse> getEventPolls(Long eventId) {
+        Event event = getEventOrThrow(eventId);
+        validatePollManagementAccess(event);
+        return buildPollResponsesForEvent(eventId);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PollResponse> getGuestPolls(Long eventId, UUID guestToken) {
+        EventGuest eventGuest = eventGuestRepository.findByEventIdAndGuestToken(eventId, guestToken)
+                .orElseThrow(() -> new ResourceNotFoundException("Приглашение не найдено"));
+
+        if (!Boolean.TRUE.equals(eventGuest.getTokenActive())) {
+            throw new IllegalArgumentException("Ссылка-приглашение больше не активна");
+        }
+
+        return buildPollResponsesForGuest(eventId, eventGuest.getId());
     }
 
     @Transactional
@@ -112,12 +135,18 @@ public class PollService {
         }
 
         pollRedisService.saveVote(pollId, eventGuest.getId(), selectedOption.getId());
-
-        List<PollOption> options = pollOptionRepository.findAllByPollIdOrderByPositionAsc(pollId);
         Map<Long, Long> counts = pollRedisService.getCounts(pollId);
+        List<PollOption> options = pollOptionRepository.findAllByPollIdOrderByPositionAsc(pollId);
 
+        // Общий WS-ответ без персональных полей конкретного гостя
+        PollResponse wsResponse = buildPollResponse(poll, options, counts);
+        webSocketEventService.sendPollUpdated(pollId, wsResponse);
+
+        // Персональный HTTP-ответ для текущего гостя
         PollResponse response = buildPollResponse(poll, options, counts);
-        webSocketEventService.sendPollUpdated(pollId, response);
+        response.setVotedByCurrentGuest(true);
+        response.setSelectedOptionId(selectedOption.getId());
+
         return response;
     }
 
@@ -160,7 +189,7 @@ public class PollService {
             votesToSave.add(pollVote);
         }
 
-        pollVoteRepository.saveAll(votesToSave); // один запрос на сохранение всех голосов
+        pollVoteRepository.saveAll(votesToSave);
 
         poll.setStatus(PollStatus.CLOSED);
         poll.setClosedAt(now);
@@ -190,6 +219,48 @@ public class PollService {
         return buildPollResponse(poll, options, counts);
     }
 
+    private List<PollResponse> buildPollResponsesForEvent(Long eventId) {
+        return pollRepository.findAllByEventIdOrderByStartedAtDesc(eventId).stream()
+                .map(poll -> {
+                    List<PollOption> options = pollOptionRepository.findAllByPollIdOrderByPositionAsc(poll.getId());
+                    Map<Long, Long> counts = poll.getStatus() == PollStatus.ACTIVE && pollRedisService.isPollActive(poll.getId())
+                            ? pollRedisService.getCounts(poll.getId())
+                            : buildCountsFromDatabase(poll.getId());
+
+                    return buildPollResponse(poll, options, counts);
+                })
+                .toList();
+    }
+
+    private List<PollResponse> buildPollResponsesForGuest(Long eventId, Long eventGuestId) {
+        return pollRepository.findAllByEventIdOrderByStartedAtDesc(eventId).stream()
+                .map(poll -> buildPollResponseForGuest(poll, eventGuestId))
+                .toList();
+    }
+
+    private PollResponse buildPollResponseForGuest(Poll poll, Long eventGuestId) {
+        List<PollOption> options = pollOptionRepository.findAllByPollIdOrderByPositionAsc(poll.getId());
+
+        Map<Long, Long> counts = poll.getStatus() == PollStatus.ACTIVE && pollRedisService.isPollActive(poll.getId())
+                ? pollRedisService.getCounts(poll.getId())
+                : buildCountsFromDatabase(poll.getId());
+
+        PollResponse response = buildPollResponse(poll, options, counts);
+
+        if (poll.getStatus() == PollStatus.ACTIVE && pollRedisService.isPollActive(poll.getId())) {
+            Map<Long, Long> choices = pollRedisService.getChoices(poll.getId());
+            Long selectedOptionId = choices.get(eventGuestId);
+
+            response.setVotedByCurrentGuest(selectedOptionId != null);
+            response.setSelectedOptionId(selectedOptionId);
+        } else {
+            response.setVotedByCurrentGuest(false);
+            response.setSelectedOptionId(null);
+        }
+
+        return response;
+    }
+
     private Poll getPollOrThrow(Long pollId) {
         return pollRepository.findById(pollId)
                 .orElseThrow(() -> new ResourceNotFoundException("Опрос не найден"));
@@ -211,54 +282,45 @@ public class PollService {
         boolean isCreator = event.getCreator().getId().equals(currentUserId);
 
         if (!isAdmin && !isCreator) {
-            throw new AccessDeniedException("У вас нет прав на управление опросами этого мероприятия");
+            throw new AccessDeniedException("У вас нет прав для управления опросами этого мероприятия");
         }
     }
 
     private List<String> normalizeOptions(List<String> options) {
-        if (options == null || options.isEmpty()) {
-            throw new IllegalArgumentException("Список вариантов ответа не должен быть пустым");
-        }
+        Set<String> normalizedOptions = new LinkedHashSet<>();
 
-        Set<String> normalized = new LinkedHashSet<>();
         for (String option : options) {
-            if (option == null) {
-                continue;
-            }
-
-            String trimmed = option.trim();
-            if (!trimmed.isBlank()) {
-                normalized.add(trimmed);
+            if (option != null) {
+                String trimmed = option.trim();
+                if (!trimmed.isBlank()) {
+                    normalizedOptions.add(trimmed);
+                }
             }
         }
 
-        if (normalized.size() < 2) {
-            throw new IllegalArgumentException("Опрос должен содержать минимум два варианта ответа");
+        if (normalizedOptions.size() < 2) {
+            throw new IllegalArgumentException("Нужно указать минимум два варианта ответа");
         }
 
-        return new ArrayList<>(normalized);
+        return new ArrayList<>(normalizedOptions);
     }
 
     private Map<Long, Long> buildCountsFromDatabase(Long pollId) {
-        List<PollVote> votes = pollVoteRepository.findAllByPollId(pollId);
-        java.util.LinkedHashMap<Long, Long> counts = new java.util.LinkedHashMap<>();
-
-        for (PollVote vote : votes) {
-            Long optionId = vote.getPollOption().getId();
-            counts.put(optionId, counts.getOrDefault(optionId, 0L) + 1);
-        }
-
-        return counts;
+        return pollVoteRepository.findAllByPollId(pollId).stream()
+                .collect(Collectors.groupingBy(
+                        vote -> vote.getPollOption().getId(),
+                        Collectors.counting()
+                ));
     }
 
     private PollResponse buildPollResponse(Poll poll, List<PollOption> options, Map<Long, Long> counts) {
         List<PollOptionResponse> optionResponses = options.stream()
-                .map(option -> pollMapper.toPollOptionResponse(
-                        option,
-                        counts.getOrDefault(option.getId(), 0L)
-                ))
+                .map(option -> pollMapper.toPollOptionResponse(option, counts.getOrDefault(option.getId(), 0L)))
                 .toList();
 
-        return pollMapper.toPollResponse(poll, optionResponses);
+        PollResponse response = pollMapper.toPollResponse(poll, optionResponses);
+        response.setVotedByCurrentGuest(false);
+        response.setSelectedOptionId(null);
+        return response;
     }
 }

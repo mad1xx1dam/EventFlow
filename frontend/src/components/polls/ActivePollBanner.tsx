@@ -1,6 +1,7 @@
 import { useState } from "react";
 import pollsApi from "../../api/pollsApi";
 import Button from "../common/Button";
+import PollResultsChart from "./PollResultsChart";
 import type { PollResponse } from "../../types/poll";
 import { getApiErrorMessage } from "../../utils/apiError";
 
@@ -29,7 +30,7 @@ const ActivePollBanner = ({ poll, onClosed }: ActivePollBannerProps) => {
 
   return (
     <div className="rounded-2xl border border-blue-200 bg-blue-50 p-5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">
             Активный опрос
@@ -48,6 +49,10 @@ const ActivePollBanner = ({ poll, onClosed }: ActivePollBannerProps) => {
       </div>
 
       {error ? <p className="mt-4 text-sm text-red-700">{error}</p> : null}
+
+      <div className="mt-6 rounded-2xl bg-white p-4">
+        <PollResultsChart poll={poll} />
+      </div>
     </div>
   );
 };

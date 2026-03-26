@@ -10,7 +10,7 @@ import GuestListTable from "../../components/guests/GuestListTable";
 import EventMapPreview from "../../components/map/EventMapPreview";
 import ActivePollBanner from "../../components/polls/ActivePollBanner";
 import PollCreateForm from "../../components/polls/PollCreateForm";
-import PollResultsChart from "../../components/polls/PollResultsChart";
+import PollHistoryList from "../../components/polls/PollHistoryList";
 import Button from "../../components/common/Button";
 import type { EventResponse } from "../../types/event";
 import type { InvitationResponse } from "../../types/invitation";
@@ -94,6 +94,16 @@ const getCountersFromInvitations = (invitations: InvitationResponse[]) => {
   );
 };
 
+const upsertPoll = (polls: PollResponse[], incomingPoll: PollResponse) => {
+  const nextPolls = polls.some((poll) => poll.id === incomingPoll.id)
+    ? polls.map((poll) => (poll.id === incomingPoll.id ? incomingPoll : poll))
+    : [incomingPoll, ...polls];
+
+  return [...nextPolls].sort(
+    (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+  );
+};
+
 const EventManagePage = () => {
   const { eventId } = useParams<{ eventId: string }>();
   const location = useLocation();
@@ -104,8 +114,7 @@ const EventManagePage = () => {
 
   const [eventData, setEventData] = useState<EventResponse | null>(null);
   const [guests, setGuests] = useState<InvitationResponse[]>([]);
-  const [activePoll, setActivePoll] = useState<PollResponse | null>(null);
-  const [lastPoll, setLastPoll] = useState<PollResponse | null>(null);
+  const [polls, setPolls] = useState<PollResponse[]>([]);
   const [guestEmails, setGuestEmails] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -121,6 +130,14 @@ const EventManagePage = () => {
   });
 
   const counters = useMemo(() => getCountersFromInvitations(guests), [guests]);
+  const activePoll = useMemo(
+    () => polls.find((poll) => poll.status === "ACTIVE") ?? null,
+    [polls]
+  );
+  const closedPolls = useMemo(
+    () => polls.filter((poll) => poll.status === "CLOSED"),
+    [polls]
+  );
 
   useEffect(() => {
     const loadPage = async () => {
@@ -134,21 +151,15 @@ const EventManagePage = () => {
       setLoadError(null);
 
       try {
-        const [eventResponse, guestsResponse] = await Promise.all([
+        const [eventResponse, guestsResponse, pollsResponse] = await Promise.all([
           eventsApi.getEventById(numericEventId),
           eventsApi.getEventGuests(numericEventId),
+          pollsApi.getEventPolls(numericEventId),
         ]);
 
         setEventData(eventResponse);
         setGuests(guestsResponse);
-
-        try {
-          const pollResponse = await pollsApi.getActivePoll(numericEventId);
-          setActivePoll(pollResponse);
-          setLastPoll(pollResponse);
-        } catch {
-          setActivePoll(null);
-        }
+        setPolls(pollsResponse);
       } catch (error: unknown) {
         const status = getApiErrorStatus(error);
         setLoadError(
@@ -179,14 +190,7 @@ const EventManagePage = () => {
     const unsubscribeEventPoll = subscribe<PollLiveEventResponse>({
       destination: `/topic/events/${numericEventId}/polls/active`,
       onMessage: (payload) => {
-        if (payload.type === "POLL_CLOSED") {
-          setActivePoll(null);
-          setLastPoll(payload.poll);
-          return;
-        }
-
-        setActivePoll(payload.poll);
-        setLastPoll(payload.poll);
+        setPolls((prev) => upsertPoll(prev, payload.poll));
       },
     });
 
@@ -204,8 +208,7 @@ const EventManagePage = () => {
     const unsubscribePollResults = subscribe<PollLiveEventResponse>({
       destination: `/topic/polls/${activePoll.id}/results`,
       onMessage: (payload) => {
-        setActivePoll(payload.poll);
-        setLastPoll(payload.poll);
+        setPolls((prev) => upsertPoll(prev, payload.poll));
       },
     });
 
@@ -352,26 +355,23 @@ const EventManagePage = () => {
             <ActivePollBanner
               poll={activePoll}
               onClosed={(closedPoll) => {
-                setActivePoll(null);
-                setLastPoll(closedPoll);
+                setPolls((prev) => upsertPoll(prev, closedPoll));
               }}
             />
           ) : (
             <PollCreateForm
               eventId={numericEventId}
               onCreated={(poll) => {
-                setActivePoll(poll);
-                setLastPoll(poll);
+                setPolls((prev) => upsertPoll(prev, poll));
               }}
             />
           )}
         </div>
 
-        {lastPoll ? (
-          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-            <PollResultsChart poll={lastPoll} />
-          </div>
-        ) : null}
+        <PollHistoryList
+          polls={closedPolls}
+          emptyText="Прошлых опросов пока нет."
+        />
       </section>
     </div>
   );

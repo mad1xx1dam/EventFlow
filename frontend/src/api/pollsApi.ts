@@ -12,6 +12,18 @@ export const pollsApi = {
     return data;
   },
 
+  async getEventPolls(eventId: number): Promise<PollResponse[]> {
+    const { data } = await axiosInstance.get<PollResponse[]>(`/events/${eventId}/polls`);
+    return data;
+  },
+
+  async getGuestPolls(eventId: number, guestToken: string): Promise<PollResponse[]> {
+    const { data } = await axiosInstance.get<PollResponse[]>(
+      `/events/${eventId}/invite/${guestToken}/polls`
+    );
+    return data;
+  },
+
   async votePoll(
     pollId: number,
     guestToken: string,

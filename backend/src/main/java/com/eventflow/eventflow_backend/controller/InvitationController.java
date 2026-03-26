@@ -4,7 +4,9 @@ import com.eventflow.eventflow_backend.dto.request.CreateInvitationsRequest;
 import com.eventflow.eventflow_backend.dto.request.UpdateRsvpRequest;
 import com.eventflow.eventflow_backend.dto.response.GuestInvitationDetailsResponse;
 import com.eventflow.eventflow_backend.dto.response.InvitationResponse;
+import com.eventflow.eventflow_backend.dto.response.PollResponse;
 import com.eventflow.eventflow_backend.service.InvitationService;
+import com.eventflow.eventflow_backend.service.PollService;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.UUID;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 public class InvitationController {
 
     private final InvitationService invitationService;
+    private final PollService pollService;
 
     @PreAuthorize("hasAnyRole('USER', 'ADMIN')")
     @PostMapping("/invitations")
@@ -41,6 +44,14 @@ public class InvitationController {
             @PathVariable UUID guestToken
     ) {
         return ResponseEntity.ok(invitationService.getGuestInvitation(eventId, guestToken));
+    }
+
+    @GetMapping("/invite/{guestToken}/polls")
+    public ResponseEntity<List<PollResponse>> getGuestPolls(
+            @PathVariable Long eventId,
+            @PathVariable UUID guestToken
+    ) {
+        return ResponseEntity.ok(pollService.getGuestPolls(eventId, guestToken));
     }
 
     @PostMapping("/invite/{guestToken}/rsvp")
