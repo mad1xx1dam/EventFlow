@@ -1,5 +1,5 @@
 # этап сборки
-FROM gradle:8.5-jdk17 AS builder
+FROM gradle:8.14.0-jdk17 AS builder
 WORKDIR /app
 COPY . .
 RUN gradle clean build -x test
