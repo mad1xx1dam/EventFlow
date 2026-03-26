@@ -25,4 +25,6 @@ export interface PollResponse {
   startedAt: string;
   closedAt: string | null;
   options: PollOptionResponse[];
+  votedByCurrentGuest: boolean;
+  selectedOptionId: number | null;
 }
