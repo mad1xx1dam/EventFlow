@@ -34,7 +34,9 @@ const GuestEventCard = ({ invitation }: GuestEventCardProps) => {
           <h1 className="text-3xl font-bold tracking-tight text-slate-900">
             {invitation.title}
           </h1>
-          <p className="mt-2 text-sm text-slate-500">{formatDateTime(invitation.startsAt)}</p>
+          <p className="mt-2 text-sm text-slate-500">
+            {formatDateTime(invitation.startsAt)}
+          </p>
         </div>
 
         <span
@@ -45,15 +47,41 @@ const GuestEventCard = ({ invitation }: GuestEventCardProps) => {
       </div>
 
       {invitation.description ? (
-        <p className="mt-4 text-sm leading-6 text-slate-600">{invitation.description}</p>
+        <p className="mt-4 text-sm leading-6 text-slate-600">
+          {invitation.description}
+        </p>
       ) : null}
 
       <div className="mt-5 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">
         <span className="font-medium text-slate-700">Адрес:</span> {invitation.address}
       </div>
 
-      <div className="mt-5">
-        <EventMapPreview lat={invitation.lat} lon={invitation.lon} />
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <h2 className="mb-4 text-base font-semibold text-slate-900">Постер</h2>
+
+          {invitation.posterUrl ? (
+            <div className="flex min-h-[320px] items-center justify-center rounded-2xl bg-white p-4">
+              <img
+                src={invitation.posterUrl}
+                alt="Постер мероприятия"
+                className="max-h-[420px] w-auto rounded-xl border border-slate-200 object-contain"
+              />
+            </div>
+          ) : (
+            <div className="flex min-h-[320px] items-center justify-center rounded-2xl bg-white px-4 py-10 text-center text-sm text-slate-500">
+              Постер не загружен
+            </div>
+          )}
+        </div>
+
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <h2 className="mb-4 text-base font-semibold text-slate-900">Место на карте</h2>
+
+          <div className="overflow-hidden rounded-2xl">
+            <EventMapPreview lat={invitation.lat} lon={invitation.lon} />
+          </div>
+        </div>
       </div>
 
       <div className="mt-4 text-sm text-slate-500">

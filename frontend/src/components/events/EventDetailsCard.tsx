@@ -27,7 +27,9 @@ const EventDetailsCard = ({ event }: EventDetailsCardProps) => {
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h2 className="text-2xl font-bold text-slate-900">{event.title}</h2>
-          <p className="mt-2 text-sm text-slate-500">{formatDateTime(event.startsAt)}</p>
+          <p className="mt-2 text-sm text-slate-500">
+            {formatDateTime(event.startsAt)}
+          </p>
         </div>
 
         <span
@@ -38,7 +40,9 @@ const EventDetailsCard = ({ event }: EventDetailsCardProps) => {
       </div>
 
       {event.description ? (
-        <p className="mt-4 text-sm leading-6 text-slate-600">{event.description}</p>
+        <p className="mt-4 text-sm leading-6 text-slate-600">
+          {event.description}
+        </p>
       ) : null}
 
       <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 text-sm text-slate-600">

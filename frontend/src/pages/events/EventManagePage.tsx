@@ -118,7 +118,9 @@ const EventManagePage = () => {
   const [guestEmails, setGuestEmails] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [guestsMessage, setGuestsMessage] = useState<string | null>(locationState?.pageMessage ?? null);
+  const [guestsMessage, setGuestsMessage] = useState<string | null>(
+    locationState?.pageMessage ?? null
+  );
   const [guestsMessageType, setGuestsMessageType] = useState<
     "success" | "warning" | "error" | null
   >(locationState?.pageMessageType ?? null);
@@ -130,10 +132,12 @@ const EventManagePage = () => {
   });
 
   const counters = useMemo(() => getCountersFromInvitations(guests), [guests]);
+
   const activePoll = useMemo(
     () => polls.find((poll) => poll.status === "ACTIVE") ?? null,
     [polls]
   );
+
   const closedPolls = useMemo(
     () => polls.filter((poll) => poll.status === "CLOSED"),
     [polls]
@@ -239,8 +243,10 @@ const EventManagePage = () => {
 
       setGuests((prev) => {
         const merged = [...prev];
+
         createdInvitations.forEach((invitation) => {
           const index = merged.findIndex((item) => item.id === invitation.id);
+
           if (index >= 0) {
             merged[index] = invitation;
           } else {
@@ -295,18 +301,16 @@ const EventManagePage = () => {
   return (
     <div className="space-y-6">
       <section className="space-y-4">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Управление мероприятием</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+          Управление мероприятием
+        </h1>
 
         <EventDetailsCard event={eventData} />
-
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <EventMapPreview lat={eventData.lat} lon={eventData.lon} />
-        </div>
 
         {guestsMessage ? (
           <div
             className={[
-              "rounded-2xl px-4 py-3 text-sm border",
+              "rounded-2xl border px-4 py-3 text-sm",
               guestsMessageType === "success"
                 ? "border-emerald-200 bg-emerald-50 text-emerald-800"
                 : guestsMessageType === "warning"
@@ -318,21 +322,49 @@ const EventManagePage = () => {
           </div>
         ) : null}
 
-        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="space-y-4">
-            <div>
-              <h3 className="text-lg font-semibold text-slate-900">Пригласить ещё гостей</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Добавьте новые email. Уже существующие приглашения не будут продублированы.
-              </p>
+        <div className="grid gap-6 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="mb-4 text-lg font-semibold text-slate-900">Постер</h3>
+
+            {eventData.posterUrl ? (
+              <div className="flex min-h-[360px] items-center justify-center rounded-2xl bg-slate-50 p-4">
+                <img
+                  src={eventData.posterUrl}
+                  alt="Постер мероприятия"
+                  className="max-h-[420px] w-auto rounded-xl border border-slate-200 object-contain"
+                />
+              </div>
+            ) : (
+              <div className="flex min-h-[360px] items-center justify-center rounded-2xl bg-slate-50 px-4 py-10 text-center text-sm text-slate-500">
+                Постер не загружен
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 className="mb-4 text-lg font-semibold text-slate-900">Место на карте</h3>
+
+            <div className="overflow-hidden rounded-2xl">
+              <EventMapPreview lat={eventData.lat} lon={eventData.lon} />
             </div>
+          </div>
 
-            <GuestEmailsTextarea value={guestEmails} onChange={setGuestEmails} />
+          <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="space-y-4">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-900">Пригласить ещё гостей</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Добавьте новые email. Уже существующие приглашения не будут продублированы.
+                </p>
+              </div>
 
-            <div className="sm:w-64">
-              <Button type="button" isLoading={isSubmittingGuests} onClick={handleAddGuests}>
-                Добавить гостей
-              </Button>
+              <GuestEmailsTextarea value={guestEmails} onChange={setGuestEmails} />
+
+              <div className="sm:w-64">
+                <Button type="button" isLoading={isSubmittingGuests} onClick={handleAddGuests}>
+                  Добавить гостей
+                </Button>
+              </div>
             </div>
           </div>
         </div>
@@ -368,10 +400,7 @@ const EventManagePage = () => {
           )}
         </div>
 
-        <PollHistoryList
-          polls={closedPolls}
-          emptyText="Прошлых опросов пока нет."
-        />
+        <PollHistoryList polls={closedPolls} emptyText="Прошлых опросов пока нет." />
       </section>
     </div>
   );
